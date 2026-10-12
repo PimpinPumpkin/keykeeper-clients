@@ -57,7 +57,7 @@ import {
   DEFAULT_COPY_PRESENTATION,
   DefaultCipherFormConfigService,
   NewCipherMenuComponent,
-  SharedFolderCardGridComponent,
+  CardGridComponent,
   VaultBreadcrumbsComponent,
   VaultItemsTableComponent,
   VaultItemsTableRowAction,
@@ -152,7 +152,7 @@ function selectionScopeDetail(scope: VaultScope): string {
     VaultOnboardingComponent,
     VaultOrganizationUserNotificationsComponent,
     VaultRemountOnDirective,
-    SharedFolderCardGridComponent,
+    CardGridComponent,
   ],
   providers: [
     safeProvider({ provide: DefaultCipherFormConfigService, useAngularDecorators: true }),
