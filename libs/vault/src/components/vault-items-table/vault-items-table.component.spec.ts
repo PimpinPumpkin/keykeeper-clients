@@ -1,9 +1,9 @@
 import { CdkVirtualScrollViewport } from "@angular/cdk/scrolling";
-import { ChangeDetectionStrategy, Component, computed, input, signal } from "@angular/core";
+import { ChangeDetectionStrategy, Component, computed, input, signal, Type } from "@angular/core";
 import { ComponentFixture, fakeAsync, TestBed, tick } from "@angular/core/testing";
 import { By } from "@angular/platform-browser";
 import { mock } from "jest-mock-extended";
-import { of, Subject } from "rxjs";
+import { of, Subject, throwError } from "rxjs";
 
 import { CollectionView } from "@bitwarden/common/admin-console/models/collections";
 import { Organization } from "@bitwarden/common/admin-console/models/domain/organization";
@@ -152,13 +152,19 @@ class ControlledAccessBadgeStubComponent {
  */
 let controlledAccessFilter: VaultControlledAccessFilter | undefined;
 
-/** A contribution offering `options`, admitting the cipher ids listed against each option id. */
+/**
+ * A contribution offering `options`, admitting the cipher ids listed against each option id, and
+ * ranking rows for the column's sort by `ranks` when given.
+ */
 function controlledAccessDouble(
   options: ControlledAccessFilterOption[],
   admits: Record<string, string[]>,
+  ranks?: Record<string, number>,
 ): VaultControlledAccessFilter {
   return {
     options$: of(options),
+    sortRanks$:
+      ranks == null ? undefined : () => of(new Map<string, number>(Object.entries(ranks))),
     narrow$<C extends CipherViewLike>(optionId: string, ciphers: C[]) {
       const admitted = admits[optionId];
       // An id no longer offered yields the input unchanged, as the token's contract requires.
@@ -172,7 +178,10 @@ function controlledAccessDouble(
 /** Hosts the table beneath a node injector carrying the optional Controlled access contribution. */
 @Component({
   selector: "test-controlled-access-host",
-  template: `<vault-items-table [ciphers]="ciphers()"></vault-items-table>`,
+  template: `<vault-items-table
+    [ciphers]="ciphers()"
+    [controlledAccessBadge]="badge()"
+  ></vault-items-table>`,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [VaultItemsTableComponent],
   providers: [
@@ -181,6 +190,7 @@ function controlledAccessDouble(
 })
 class ControlledAccessHostComponent {
   readonly ciphers = signal<CipherViewLike[]>([]);
+  readonly badge = signal<Type<unknown> | null>(null);
 }
 
 function batchBarDouble() {
@@ -2589,6 +2599,104 @@ describe("VaultItemsTableComponent", () => {
       await settle();
 
       expect(hostNames()).toEqual(["Amazon", "Bank", "Cloud"]);
+    });
+
+    describe("sorting the column", () => {
+      /** Cloud leads, Amazon follows, and Bank has no state, so it is unranked. */
+      const RANKS = { c: 0, a: 1 };
+
+      let sortRanks: jest.SpyInstance;
+
+      function renderSortableHost(): void {
+        controlledAccessFilter = controlledAccessDouble(OPTIONS, {}, RANKS);
+        sortRanks = jest.spyOn(controlledAccessFilter, "sortRanks$" as never);
+        hostFixture = TestBed.createComponent(ControlledAccessHostComponent);
+        hostFixture.componentInstance.badge.set(ControlledAccessBadgeStubComponent);
+        hostFixture.componentInstance.ciphers.set(ROWS());
+        hostFixture.detectChanges();
+      }
+
+      function hostSortedNames(): string[] {
+        return hostTable()
+          .sorted()
+          .map((cipher) => cipher.name);
+      }
+
+      it("asks the host nothing until the column is sorted", async () => {
+        renderSortableHost();
+        await settle();
+
+        expect(sortRanks).not.toHaveBeenCalled();
+      });
+
+      it("orders rows by the host's rank, unranked rows last", async () => {
+        renderSortableHost();
+
+        hostTable().sort.set({ column: "controlledAccess", direction: "asc" });
+        await settle();
+
+        expect(hostSortedNames()).toEqual(["Cloud", "Amazon", "Bank"]);
+      });
+
+      it("moves unranked rows to the top when sorted descending", async () => {
+        renderSortableHost();
+
+        hostTable().sort.set({ column: "controlledAccess", direction: "desc" });
+        await settle();
+
+        expect(hostSortedNames()).toEqual(["Bank", "Amazon", "Cloud"]);
+      });
+
+      /** Renders the host with `filter` provided and the column sorted ascending. */
+      async function sortWith(filter: VaultControlledAccessFilter): Promise<void> {
+        controlledAccessFilter = filter;
+        hostFixture = TestBed.createComponent(ControlledAccessHostComponent);
+        hostFixture.componentInstance.badge.set(ControlledAccessBadgeStubComponent);
+        hostFixture.componentInstance.ciphers.set(ROWS());
+        hostFixture.detectChanges();
+
+        hostTable().sort.set({ column: "controlledAccess", direction: "asc" });
+        await settle();
+      }
+
+      it("calls the host's sortRanks$ as a method, so an implementation can read `this`", async () => {
+        class ClassBasedFilter implements VaultControlledAccessFilter {
+          private readonly ranks = new Map<string, number>(Object.entries(RANKS));
+          readonly options$ = of(OPTIONS);
+          narrow$<C extends CipherViewLike>(_optionId: string, ciphers: C[]) {
+            return of(ciphers);
+          }
+          sortRanks$() {
+            return of(this.ranks);
+          }
+        }
+
+        await sortWith(new ClassBasedFilter());
+
+        expect(hostSortedNames()).toEqual(["Cloud", "Amazon", "Bank"]);
+      });
+
+      it("keeps every row, in name order, when the host's ranks fail", async () => {
+        await sortWith({
+          ...controlledAccessDouble(OPTIONS, {}),
+          sortRanks$: () => throwError(() => new Error("boom")),
+        });
+
+        expect(hostSortedNames()).toEqual(["Amazon", "Bank", "Cloud"]);
+      });
+
+      it("keeps name order when the host offers no ranks", async () => {
+        controlledAccessFilter = controlledAccessDouble(OPTIONS, {});
+        hostFixture = TestBed.createComponent(ControlledAccessHostComponent);
+        hostFixture.componentInstance.badge.set(ControlledAccessBadgeStubComponent);
+        hostFixture.componentInstance.ciphers.set(ROWS());
+        hostFixture.detectChanges();
+
+        hostTable().sort.set({ column: "controlledAccess", direction: "asc" });
+        await settle();
+
+        expect(hostSortedNames()).toEqual(["Amazon", "Bank", "Cloud"]);
+      });
     });
 
     it("resets when Clear all is clicked", async () => {
