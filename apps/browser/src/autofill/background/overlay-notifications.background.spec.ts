@@ -264,6 +264,101 @@ describe("OverlayNotificationsBackground", () => {
       });
     });
 
+    describe("one-time codes (Keykeeper)", () => {
+      it("does not store a lone one-time code as a password", async () => {
+        sendMockExtensionMessage(
+          {
+            command: "formFieldSubmitted",
+            uri: "example.com",
+            username: "",
+            password: "123456",
+            newPassword: "",
+          },
+          sender,
+        );
+        await flushPromises();
+
+        expect(
+          overlayNotificationsBackground["modifyLoginCipherFormData"].get(sender.tab.id),
+        ).toBeUndefined();
+      });
+
+      it("does not merge a code from a second sign-in step with the first step's username", async () => {
+        sendMockExtensionMessage(
+          {
+            command: "formFieldSubmitted",
+            uri: "example.com",
+            username: "alice",
+            password: "correct-password",
+            newPassword: "",
+          },
+          sender,
+        );
+        await flushPromises();
+        sendMockExtensionMessage(
+          {
+            command: "formFieldSubmitted",
+            uri: "example.com",
+            username: "",
+            password: "123456",
+            newPassword: "",
+          },
+          sender,
+        );
+        await flushPromises();
+
+        expect(
+          overlayNotificationsBackground["modifyLoginCipherFormData"].get(sender.tab.id),
+        ).toEqual({
+          uri: "example.com",
+          username: "alice",
+          password: "correct-password",
+          newPassword: "",
+        });
+      });
+
+      it("still stores a numeric PIN submitted together with a username", async () => {
+        sendMockExtensionMessage(
+          {
+            command: "formFieldSubmitted",
+            uri: "example.com",
+            username: "alice",
+            password: "123456",
+            newPassword: "",
+          },
+          sender,
+        );
+        await flushPromises();
+
+        expect(
+          overlayNotificationsBackground["modifyLoginCipherFormData"].get(sender.tab.id),
+        ).toEqual({ uri: "example.com", username: "alice", password: "123456", newPassword: "" });
+      });
+
+      it("still stores a password change from a form without a username field", async () => {
+        sendMockExtensionMessage(
+          {
+            command: "formFieldSubmitted",
+            uri: "example.com",
+            username: "",
+            password: "old-password",
+            newPassword: "new-password-2",
+          },
+          sender,
+        );
+        await flushPromises();
+
+        expect(
+          overlayNotificationsBackground["modifyLoginCipherFormData"].get(sender.tab.id),
+        ).toEqual({
+          uri: "example.com",
+          username: "",
+          password: "old-password",
+          newPassword: "new-password-2",
+        });
+      });
+    });
+
     it("clears the modified login cipher form data after 5 seconds", () => {
       sendMockExtensionMessage(
         {

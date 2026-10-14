@@ -19,6 +19,14 @@ import {
 } from "./abstractions/overlay-notifications.background";
 import NotificationBackground from "./notification.background";
 
+/**
+ * Keykeeper: true when a value looks like a one-time code (4 to 8 digits) rather
+ * than a password.
+ */
+export function isLikelyOneTimeCode(value: string | undefined): boolean {
+  return /^\d{4,8}$/.test((value ?? "").trim());
+}
+
 export class OverlayNotificationsBackground implements OverlayNotificationsBackgroundInterface {
   private websiteOriginsWithFields: WebsiteOriginsWithFields = new Map();
   private activeFormSubmissionRequests: ActiveFormSubmissionRequests = new Set();
@@ -137,6 +145,14 @@ export class OverlayNotificationsBackground implements OverlayNotificationsBackg
 
     const { uri, username, password, newPassword } = message;
     if (!username && !password && !newPassword) {
+      return;
+    }
+
+    // Keykeeper: a submission with no username whose only secret looks like a
+    // one-time code is the second step of a sign-in, not a password. Never keep
+    // it, and never merge it with the username from the first step, which would
+    // offer the code as a "changed password".
+    if (!username && isLikelyOneTimeCode(password || newPassword) && !(password && newPassword)) {
       return;
     }
 
