@@ -472,8 +472,17 @@ export class InputPasswordComponent implements OnInit {
     checkForBreaches: boolean,
   ): Promise<boolean> {
     // Check if the password is breached, weak, or both
-    const passwordIsBreached =
-      checkForBreaches && (await this.auditService.passwordLeaked(newPassword)) > 0;
+    // Keykeeper: the breach check calls a third-party service. When it can't be
+    // reached (offline, or blocked by a firewall), continue without it instead
+    // of silently failing the form. Strength rules still apply.
+    let passwordIsBreached = false;
+    if (checkForBreaches) {
+      try {
+        passwordIsBreached = (await this.auditService.passwordLeaked(newPassword)) > 0;
+      } catch {
+        passwordIsBreached = false;
+      }
+    }
 
     const passwordIsWeak = passwordStrengthScore != null && passwordStrengthScore < 3;
 
