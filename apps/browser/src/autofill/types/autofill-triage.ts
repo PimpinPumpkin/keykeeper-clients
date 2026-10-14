@@ -18,6 +18,10 @@ export interface AutofillTriageResponse {
    * The htmlID or htmlName of the right-clicked field, if resolvable.
    */
   targetFieldRef?: string;
+  /**
+   * Keykeeper: the opid of the right-clicked field, which every collected field has.
+   */
+  targetOpid?: string;
 }
 
 /**

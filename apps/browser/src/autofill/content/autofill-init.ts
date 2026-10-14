@@ -176,7 +176,9 @@ class AutofillInit implements AutofillInitInterface {
       targetFieldRef = match?.htmlID ?? match?.htmlName ?? undefined;
     }
 
-    return { pageDetails, targetFieldRef };
+    // Keykeeper: the internal id always exists, even for fields without an id or name.
+    const targetOpid = (el as { opid?: string } | null)?.opid;
+    return { pageDetails, targetFieldRef, targetOpid };
   }
 
   /**

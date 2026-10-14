@@ -39,6 +39,7 @@ import {
   openAddEditVaultItemPopout,
   openVaultItemPasswordRepromptPopout,
 } from "../../vault/popup/utils/vault-popout-window";
+import { handleFillFieldMenuClick } from "../keykeeper/fill-field-menu";
 import { AutofillTriageService } from "../services/abstractions/autofill-triage.service";
 import { AutofillCipherTypeId } from "../types";
 import {
@@ -108,6 +109,17 @@ export class ContextMenuClickedHandler {
         await this.autofillTriageAction(info, tab);
         break;
       default:
+        // Keykeeper: "Fill this field with" items (see keykeeper/fill-field-menu.ts).
+        if (
+          await handleFillFieldMenuClick(info, tab, {
+            authService: this.authService,
+            accountService: this.accountService,
+            cipherService: this.cipherService,
+            totpService: this.totpService,
+          })
+        ) {
+          break;
+        }
         await this.cipherAction(info, tab);
     }
   }

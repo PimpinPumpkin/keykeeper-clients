@@ -30,6 +30,8 @@ import { CipherType } from "@bitwarden/common/vault/enums/cipher-type";
 import { CipherView } from "@bitwarden/common/vault/models/view/cipher.view";
 import { RestrictedItemTypesService } from "@bitwarden/common/vault/services/restricted-item-types.service";
 
+import { addCipherToFillFieldMenu, initFillFieldMenu } from "../keykeeper/fill-field-menu";
+
 import { InitContextMenuItems } from "./abstractions/main-context-menu-handler";
 
 function separatorIds() {
@@ -247,6 +249,8 @@ export class MainContextMenuHandler {
       } of items) {
         await MainContextMenuHandler.create({ ...otherOptions, contexts: ["all"] });
       }
+      // Keykeeper: "Fill this field with" (see keykeeper/fill-field-menu.ts).
+      await initFillFieldMenu();
     } catch (error) {
       if (error instanceof Error) {
         this.logService.warning(error.message);
@@ -317,6 +321,8 @@ export class MainContextMenuHandler {
 
   async loadOptions(title: string, optionId: string, cipher?: CipherView) {
     try {
+      await addCipherToFillFieldMenu(cipher);
+
       const sanitizedTitle = MainContextMenuHandler.sanitizeContextMenuTitle(title);
 
       const createChildItem = async (parentId: string) => {

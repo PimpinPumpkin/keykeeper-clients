@@ -53,6 +53,7 @@ import { getWebExtSender } from "../../platform/utils/web-ext-sender";
 import { openVaultItemPasswordRepromptPopout } from "../../vault/popup/utils/vault-popout-window";
 import { AutofillMessageCommand, AutofillMessageSender } from "../enums/autofill-message.enums";
 import { InlineMenuFillTypes, type InlineMenuFillType } from "../enums/autofill-overlay.enum";
+import { applyFillRules, FillSource, staticValueFor } from "../keykeeper/fill-rules";
 import AutofillField from "../models/autofill-field";
 import AutofillPageDetails from "../models/autofill-page-details";
 import AutofillScript from "../models/autofill-script";
@@ -812,6 +813,15 @@ export default class AutofillService implements AutofillServiceInterface {
 
     const fillScript = new AutofillScript();
     const filledFields: { [id: string]: AutofillField } = {};
+    // Keykeeper: the item's own fill rules come first (see keykeeper/fill-rules.ts).
+    await applyFillRules(
+      options.cipher,
+      pageDetails,
+      fillScript,
+      filledFields,
+      (source) => this.keykeeperFillRuleValue(options.cipher, source),
+      AutofillService.fillByOpid,
+    );
     const fields = options.cipher.fields;
 
     if (fields && fields.length) {
@@ -891,6 +901,22 @@ export default class AutofillService implements AutofillServiceInterface {
     }
 
     return result;
+  }
+
+  /**
+   * Keykeeper: the value a fill rule asks for, including a fresh TOTP code.
+   */
+  private async keykeeperFillRuleValue(
+    cipher: CipherView,
+    source: FillSource,
+  ): Promise<string | null> {
+    if (source.from === "totp") {
+      if (!cipher.login?.totp) {
+        return null;
+      }
+      return (await firstValueFrom(this.totpService.getCode$(cipher.login.totp))).code;
+    }
+    return staticValueFor(cipher, source);
   }
 
   /**

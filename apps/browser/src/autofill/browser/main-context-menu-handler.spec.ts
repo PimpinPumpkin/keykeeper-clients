@@ -70,6 +70,9 @@ const createCipher = (data?: {
   return cipherView;
 };
 
+// Keykeeper: our "Fill this field with" items are covered by keykeeper/fill-field-menu.spec.ts.
+jest.mock("../keykeeper/fill-field-menu");
+
 describe("context-menu", () => {
   let tokenService: MockProxy<TokenService>;
   let autofillSettingsService: MockProxy<AutofillSettingsServiceAbstraction>;
