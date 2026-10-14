@@ -146,8 +146,10 @@ export function visibleCustomFields(cipher: CipherView): FieldView[] {
 /**
  * Applies an item's fill rules to a fill script, before upstream's own
  * matching runs. Value rules fill their field. Never rules claim their field
- * without filling it, so nothing later fills it either. Fields claimed here are
- * added to `filledFields`, which upstream's matching skips.
+ * without filling it. Fields claimed here are added to `filledFields`, which
+ * upstream's matching skips. Returns the never-fill fields' opids, which the
+ * caller also hides from upstream's field selection, so a password meant for
+ * a never-fill field goes to the next fitting field instead of nowhere.
  */
 export async function applyFillRules(
   cipher: CipherView,
@@ -156,10 +158,11 @@ export async function applyFillRules(
   filledFields: { [opid: string]: AutofillField },
   valueFor: (source: FillSource) => Promise<string | null>,
   fill: (fillScript: AutofillScript, field: AutofillField, value: string) => void,
-): Promise<void> {
+): Promise<Set<string>> {
+  const neverFill = new Set<string>();
   const rules = readFillRules(cipher);
   if (!rules.length) {
-    return;
+    return neverFill;
   }
   for (const field of pageDetails.fields) {
     if (field.opid == null || Object.prototype.hasOwnProperty.call(filledFields, field.opid)) {
@@ -171,6 +174,7 @@ export async function applyFillRules(
     }
     if (rule.fill.from === "never") {
       filledFields[field.opid] = field;
+      neverFill.add(field.opid);
       continue;
     }
     const value = await valueFor(rule.fill);
@@ -180,6 +184,7 @@ export async function applyFillRules(
     filledFields[field.opid] = field;
     fill(fillScript, field, value);
   }
+  return neverFill;
 }
 
 /** The plain value for a source on an item, without the TOTP code (async elsewhere). */

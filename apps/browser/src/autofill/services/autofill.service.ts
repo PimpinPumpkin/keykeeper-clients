@@ -814,7 +814,7 @@ export default class AutofillService implements AutofillServiceInterface {
     const fillScript = new AutofillScript();
     const filledFields: { [id: string]: AutofillField } = {};
     // Keykeeper: the item's own fill rules come first (see keykeeper/fill-rules.ts).
-    await applyFillRules(
+    const neverFill = await applyFillRules(
       options.cipher,
       pageDetails,
       fillScript,
@@ -822,6 +822,12 @@ export default class AutofillService implements AutofillServiceInterface {
       (source) => this.keykeeperFillRuleValue(options.cipher, source),
       AutofillService.fillByOpid,
     );
+    if (neverFill.size) {
+      pageDetails = {
+        ...pageDetails,
+        fields: pageDetails.fields.filter((field) => !neverFill.has(field.opid)),
+      };
+    }
     const fields = options.cipher.fields;
 
     if (fields && fields.length) {

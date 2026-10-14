@@ -180,10 +180,18 @@ describe("Keykeeper fill rules", () => {
       const fillScript = new AutofillScript();
       const filledFields: { [opid: string]: AutofillField } = {};
 
-      await applyFillRules(cipher, pageDetails, fillScript, filledFields, valueFor(cipher), fill);
+      const neverFill = await applyFillRules(
+        cipher,
+        pageDetails,
+        fillScript,
+        filledFields,
+        valueFor(cipher),
+        fill,
+      );
 
       expect(fillScript.script).toEqual([]);
       expect(Object.keys(filledFields)).toEqual(["__2"]);
+      expect([...neverFill]).toEqual(["__2"]);
     });
 
     it("fills the verification code when the rule asks for it", async () => {
