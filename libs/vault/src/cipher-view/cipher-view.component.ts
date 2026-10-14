@@ -39,6 +39,7 @@ import {
 
 import { KeykeeperExpirationViewComponent } from "../keykeeper/expiration-view.component";
 import { visibleCustomFields } from "../keykeeper/reserved-fields";
+import { KeykeeperTemplateLabelComponent } from "../keykeeper/template-label.component";
 
 import { AdditionalOptionsComponent } from "./additional-options/additional-options.component";
 import { AttachmentsV2ViewComponent } from "./attachments/attachments-v2-view.component";
@@ -61,6 +62,7 @@ import { ViewIdentitySectionsComponent } from "./view-identity-sections/view-ide
   templateUrl: "cipher-view.component.html",
   imports: [
     KeykeeperExpirationViewComponent,
+    KeykeeperTemplateLabelComponent,
     CalloutModule,
     CommonModule,
     SearchModule,

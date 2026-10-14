@@ -103,6 +103,9 @@
     <app-passport-view [passport]="cipher()!.passport" [cipher]="cipher()!"></app-passport-view>
   }
 
+  <!-- Keykeeper: the template the item came from -->
+  <app-keykeeper-template-label [cipher]="cipher()"></app-keykeeper-template-label>
+
   <!-- Keykeeper: expiration date -->
   <app-keykeeper-expiration [cipher]="cipher()"></app-keykeeper-expiration>
 

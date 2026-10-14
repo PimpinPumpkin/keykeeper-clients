@@ -3,6 +3,7 @@ import { Organization } from "@bitwarden/common/admin-console/models/domain/orga
 import { CipherId, CollectionId, OrganizationId } from "@bitwarden/common/types/guid";
 import { CipherType } from "@bitwarden/common/vault/enums";
 import { Cipher } from "@bitwarden/common/vault/models/domain/cipher";
+import { FieldView } from "@bitwarden/common/vault/models/view/field.view";
 import { FolderView } from "@bitwarden/common/vault/models/view/folder.view";
 
 /**
@@ -50,6 +51,8 @@ export type OptionalInitialValues = {
   state?: string;
   postalCode?: string;
   country?: string;
+  // Keykeeper: starting custom fields, for example from an item template.
+  fields?: FieldView[];
 };
 
 /**

@@ -78,6 +78,7 @@ import { CipherType } from "@bitwarden/common/vault/enums";
 import { CipherRepromptType } from "@bitwarden/common/vault/enums/cipher-reprompt-type";
 import { TreeNode } from "@bitwarden/common/vault/models/domain/tree-node";
 import { CipherView } from "@bitwarden/common/vault/models/view/cipher.view";
+import { FieldView } from "@bitwarden/common/vault/models/view/field.view";
 import { ServiceUtils } from "@bitwarden/common/vault/service-utils";
 import { RestrictedItemTypesService } from "@bitwarden/common/vault/services/restricted-item-types.service";
 import { SearchTextDebounceInterval } from "@bitwarden/common/vault/services/search.service";
@@ -94,35 +95,38 @@ import {
   AddItemDialogCloseResult,
   AddItemDialogComponent,
   AddItemDialogResult,
+  All,
+  ASSIGN_COLLECTIONS_DIALOG,
   AttachmentDialogResult,
   AttachmentsV2Component,
+  BULK_DELETE_DIALOG,
+  BulkDeleteDialogResult,
+  BulkMoveDialogResult,
   CipherFormConfig,
   CollectionAssignmentResult,
+  createFilterFunction,
   DecryptionFailureDialogComponent,
   DefaultCipherFormConfigService,
-  PasswordRepromptService,
-  VaultFilterServiceAbstraction as VaultFilterService,
-  RoutedVaultFilterBridgeService,
-  RoutedVaultFilterService,
-  createFilterFunction,
-  All,
-  RoutedVaultFilterModel,
-  VaultFilter,
-  FolderFilter,
-  OrganizationFilter,
-  VaultItemsTransferService,
   DefaultVaultItemsTransferService,
+  FolderFilter,
+  KeykeeperTemplatePickerDialogComponent,
+  openBulkMoveDialog,
+  OrganizationFilter,
+  PasswordRepromptService,
+  RoutedVaultFilterBridgeService,
+  RoutedVaultFilterModel,
+  RoutedVaultFilterService,
+  templateCipherType,
+  templateFields,
+  VaultBatchActionComponent,
+  VaultBatchBarService,
+  VaultFilter,
+  VaultFilterServiceAbstraction as VaultFilterService,
   VaultItem,
   VaultItemDialogComponent,
   VaultItemDialogMode,
   VaultItemDialogResult,
-  BulkDeleteDialogResult,
-  BulkMoveDialogResult,
-  openBulkMoveDialog,
-  VaultBatchBarService,
-  VaultBatchActionComponent,
-  ASSIGN_COLLECTIONS_DIALOG,
-  BULK_DELETE_DIALOG,
+  VaultItemsTransferService,
   VaultOrganizationUserNotificationsComponent,
   Vfo1TerminologyService,
 } from "@bitwarden/vault";
@@ -1048,7 +1052,17 @@ export class VaultComponent<C extends CipherViewLike> implements OnInit, OnDestr
    * Opens the add cipher dialog.
    * @param cipherType The type of cipher to add.
    */
-  async addCipher(cipherType?: CipherType) {
+  /** Keykeeper: pick a template, then open a new item with its fields. */
+  async addFromTemplate() {
+    const template = await firstValueFrom(
+      KeykeeperTemplatePickerDialogComponent.open(this.dialogService).closed,
+    );
+    if (template) {
+      await this.addCipher(templateCipherType(template), templateFields(template));
+    }
+  }
+
+  async addCipher(cipherType?: CipherType, keykeeperFields?: FieldView[]) {
     const type = cipherType ?? this.activeFilter.cipherType;
     const cipherFormConfig = await this.cipherFormConfigService.buildConfig("add", undefined, type);
     const collectionId =
@@ -1081,6 +1095,7 @@ export class VaultComponent<C extends CipherViewLike> implements OnInit, OnDestr
       organizationId: organizationId as OrganizationId,
       collectionIds: [collectionId as CollectionId],
       folderId: this.activeFilter.folderId,
+      fields: keykeeperFields,
     };
 
     await this.openVaultItemDialog("form", cipherFormConfig);

@@ -8,6 +8,7 @@
   [canCreateCollections]="canCreateCollections"
   [collection]="selectedCollection"
   (onAddCipher)="addCipher($event)"
+  (keykeeperTemplateRequested)="addFromTemplate()"
   (onAddCollection)="addCollection()"
   (onAddFolder)="addFolder()"
   (onEditCollection)="editCollection(selectedCollection.node, $event.tab)"

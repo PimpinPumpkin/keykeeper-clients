@@ -116,6 +116,10 @@ export class VaultHeaderComponent {
   // eslint-disable-next-line @angular-eslint/prefer-output-emitter-ref
   @Output() onAddCipher = new EventEmitter<CipherType | undefined>();
 
+  /** Keykeeper: a new item from a template was requested. */
+  // eslint-disable-next-line @angular-eslint/prefer-output-emitter-ref
+  @Output() keykeeperTemplateRequested = new EventEmitter<void>();
+
   /** Emits an event when the new collection button is clicked in the 'New' dropdown menu */
   // FIXME(https://bitwarden.atlassian.net/browse/CL-903): Migrate to Signals
   // eslint-disable-next-line @angular-eslint/prefer-output-emitter-ref

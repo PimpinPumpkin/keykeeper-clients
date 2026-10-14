@@ -115,3 +115,5 @@ export { Vfo1IconPipe } from "./pipes/vfo1-icon.pipe";
 export * from "./keykeeper/expiration";
 export * from "./keykeeper/expiration-badge.component";
 export * from "./keykeeper/reserved-fields";
+export * from "./keykeeper/templates";
+export * from "./keykeeper/template-picker-dialog.component";

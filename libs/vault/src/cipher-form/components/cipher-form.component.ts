@@ -296,6 +296,10 @@ export class CipherFormComponent implements AfterViewInit, OnInit, OnChanges, Ci
       }
     } else {
       this.updatedCipherView.type = this.config.cipherType;
+      // Keykeeper: starting custom fields, for example from an item template.
+      if (this.config.initialValues?.fields?.length) {
+        this.updatedCipherView.fields = this.config.initialValues.fields;
+      }
 
       if (this.config.cipherType === CipherType.SecureNote) {
         this.updatedCipherView.secureNote.type = SecureNoteType.Generic;

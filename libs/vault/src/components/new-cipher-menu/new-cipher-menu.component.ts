@@ -69,6 +69,8 @@ export class NewCipherMenuComponent {
   collectionAdded = output();
   cipherAdded = output<CipherType>();
   onAddItemDialog = output();
+  /** Keykeeper: the person asked for a new item from a template. */
+  templateRequested = output();
 
   private readonly terminology = inject(Vfo1TerminologyService);
 

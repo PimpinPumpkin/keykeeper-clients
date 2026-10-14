@@ -183,7 +183,10 @@ export class CustomFieldsComponent implements OnInit, AfterViewInit {
 
     // Keykeeper: its own fields are not shown here (see updateCipher).
     // When available, populate the form with the existing fields
-    visibleCustomFields(prefillCipher?.fields).forEach((field) => {
+    // Keykeeper: a new item can start with fields, for example from a template.
+    const prefillFields =
+      prefillCipher?.fields ?? this.cipherFormContainer.config.initialValues?.fields;
+    visibleCustomFields(prefillFields).forEach((field) => {
       let value: string | boolean = field.value;
 
       if (field.type === FieldType.Boolean) {

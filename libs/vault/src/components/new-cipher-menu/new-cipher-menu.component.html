@@ -45,6 +45,11 @@
         </button>
       }
       @if (canCreateCipher()) {
+        <!-- Keykeeper: new items from templates -->
+        <button type="button" bitMenuItem (click)="templateRequested.emit()">
+          <i class="bwi bwi-fw bwi-file-text" slot="start" aria-hidden="true"></i>
+          From template
+        </button>
         <bit-menu-divider></bit-menu-divider>
       }
       @if (canCreateFolder()) {
