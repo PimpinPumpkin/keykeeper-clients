@@ -20,7 +20,7 @@ import {
 } from "@bitwarden/common/admin-console/abstractions/organization/organization.service.abstraction";
 import { PolicyService } from "@bitwarden/common/admin-console/abstractions/policy/policy.service.abstraction";
 import { ProviderService } from "@bitwarden/common/admin-console/abstractions/provider.service";
-import { OrganizationUserType, ProviderType } from "@bitwarden/common/admin-console/enums";
+import { ProviderType } from "@bitwarden/common/admin-console/enums";
 import { Organization } from "@bitwarden/common/admin-console/models/domain/organization";
 import { Provider } from "@bitwarden/common/admin-console/models/domain/provider";
 import { AccountService } from "@bitwarden/common/auth/abstractions/account.service";
@@ -194,22 +194,11 @@ export class ProductSwitcherService {
             ? "Business Unit Portal"
             : "Provider Portal";
 
-        const orgsMarketingRoute = this.platformUtilsService.isSelfHost()
-          ? {
-              route: "https://bitwarden.com/products/business/",
-              external: true,
-            }
-          : {
-              route: "/create-organization",
-              external: false,
-            };
-
-        // Check if SM ads should be disabled for any organization
-        // SM ads are disabled if the user is a regular User (not Admin or Owner)
-        // in an organization that has useDisableSMAdsForUsers enabled
-        const shouldDisableSMAds = orgs.some(
-          (org) => org.useDisableSMAdsForUsers === true && org.type === OrganizationUserType.User,
-        );
+        // Keykeeper: creating an organization happens in the app, never on a sales site.
+        const orgsMarketingRoute = {
+          route: "/create-organization",
+          external: false,
+        };
 
         const products = {
           pm: {
@@ -268,11 +257,9 @@ export class ProductSwitcherService {
         const bento: ProductSwitcherItem[] = [products.pm];
         const other: ProductSwitcherItem[] = [];
 
+        // Keykeeper: Secrets Manager is a Bitwarden-only product. Never advertise it.
         if (smOrg) {
           bento.push(products.sm);
-        } else if (!shouldDisableSMAds) {
-          // Only show SM in "other" section if ads are not disabled
-          other.push(products.sm);
         }
 
         if (acOrg) {

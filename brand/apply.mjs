@@ -205,6 +205,25 @@ function apply() {
     else copyInto(from, `apps/web/src/images/icons/${file}`);
   }
 
+  // 7. Links to Bitwarden's website in code: help, products, downloads, legal,
+  //    and the page the extension opens after a user installs it. Subdomains
+  //    like vault.bitwarden.com are functional and left alone. Tests keep theirs.
+  let codeFiles = 0;
+  for (const rel of trackedFiles("apps/**/*.ts", "libs/**/*.ts")) {
+    if (/\.spec\.ts$|\.stories\.ts$|\/spec-data\/|\/spec\/|\/test\//.test(rel)) continue;
+    const source = read(rel);
+    const branded = source.replace(
+      /(["'`])https:\/\/(www\.)?bitwarden\.com\//g,
+      `$1${BRAND.urls.website}/`,
+    );
+    if (branded !== source) {
+      write(rel, branded);
+      codeFiles++;
+    }
+  }
+  if (codeFiles < 10)
+    fail(`rewrote website links in only ${codeFiles} code files. Upstream changed?`);
+
   console.log(
     `brand: applied "${BRAND.name}" to ${touched.size} files ` +
       `(${locales.length} locale files, ${templates} templates)`,
