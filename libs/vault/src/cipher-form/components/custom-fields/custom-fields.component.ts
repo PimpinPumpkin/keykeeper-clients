@@ -115,9 +115,6 @@ export class CustomFieldsComponent implements OnInit, AfterViewInit {
   /** True when edit/reorder toggles should be hidden based on partial-edit */
   isPartialEdit: boolean;
 
-  /** Keykeeper's own fields on the item, kept out of the form and restored on save. */
-  private keykeeperFields: FieldView[] = [];
-
   /** True when there are custom fields available */
   hasCustomFields = false;
 
@@ -184,9 +181,7 @@ export class CustomFieldsComponent implements OnInit, AfterViewInit {
 
     const prefillCipher = this.cipherFormContainer.getInitialCipherView();
 
-    // Keykeeper: its own fields are not shown here, and go back unchanged on save.
-    this.keykeeperFields = keykeeperFields(prefillCipher?.fields);
-
+    // Keykeeper: its own fields are not shown here (see updateCipher).
     // When available, populate the form with the existing fields
     visibleCustomFields(prefillCipher?.fields).forEach((field) => {
       let value: string | boolean = field.value;
@@ -412,8 +407,10 @@ export class CustomFieldsComponent implements OnInit, AfterViewInit {
 
     this.numberOfFieldsChange.emit(newFields.length);
 
+    // Keykeeper: keep its own fields as they are on the item right now, which
+    // another section (expiration, for example) may have just changed.
     this.cipherFormContainer.patchCipher((cipher) => {
-      cipher.fields = [...newFields, ...this.keykeeperFields];
+      cipher.fields = [...newFields, ...keykeeperFields(cipher.fields)];
       return cipher;
     });
   }

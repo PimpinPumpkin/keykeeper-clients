@@ -52,6 +52,7 @@ import {
 } from "@bitwarden/components";
 import {
   DecryptionFailureDialogComponent,
+  KeykeeperExpirationBadgeComponent,
   OrgIconDirective,
   PasswordRepromptService,
 } from "@bitwarden/vault";
@@ -69,6 +70,7 @@ import { ItemMoreOptionsComponent } from "../item-more-options/item-more-options
 
 @Component({
   imports: [
+    KeykeeperExpirationBadgeComponent,
     CommonModule,
     ItemModule,
     ButtonModule,

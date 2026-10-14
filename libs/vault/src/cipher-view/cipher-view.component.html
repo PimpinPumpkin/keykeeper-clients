@@ -103,6 +103,9 @@
     <app-passport-view [passport]="cipher()!.passport" [cipher]="cipher()!"></app-passport-view>
   }
 
+  <!-- Keykeeper: expiration date -->
+  <app-keykeeper-expiration [cipher]="cipher()"></app-keykeeper-expiration>
+
   <!-- ADDITIONAL OPTIONS -->
   @if (cipher()?.notes) {
     <app-additional-options [notes]="cipher()!.notes"> </app-additional-options>

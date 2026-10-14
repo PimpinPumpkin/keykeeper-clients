@@ -12,6 +12,8 @@
       <bit-label>{{ "notes" | i18n }}</bit-label>
       <textarea bitInput rows="5" formControlName="notes"></textarea>
     </bit-form-field>
+    <!-- Keykeeper: expiration date -->
+    <vault-keykeeper-expiration-field></vault-keykeeper-expiration-field>
     @if (passwordRepromptEnabled$ | async) {
       <bit-form-control [disableMargin]="hasCustomFields || isPartialEdit">
         <input type="checkbox" bitCheckbox formControlName="reprompt" />

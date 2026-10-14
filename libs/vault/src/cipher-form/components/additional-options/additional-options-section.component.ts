@@ -17,6 +17,7 @@ import {
   TypographyModule,
 } from "@bitwarden/components";
 
+import { KeykeeperExpirationFieldComponent } from "../../../keykeeper/expiration-field.component";
 import { PasswordRepromptService } from "../../../services/password-reprompt.service";
 import { CipherFormContainer } from "../../cipher-form-container";
 import { CustomFieldsComponent } from "../custom-fields/custom-fields.component";
@@ -38,6 +39,7 @@ import { CustomFieldsComponent } from "../custom-fields/custom-fields.component"
     CommonModule,
     CustomFieldsComponent,
     LinkModule,
+    KeykeeperExpirationFieldComponent,
   ],
 })
 export class AdditionalOptionsSectionComponent implements OnInit {

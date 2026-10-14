@@ -326,7 +326,9 @@ describe("CustomFieldsComponent", () => {
     it("are kept unchanged when another field changes", () => {
       component.fields.at(0).patchValue({ value: "new text value" });
 
-      const updatedCipher = patchCipher.mock.lastCall[0](new CipherView());
+      const current = new CipherView();
+      current.fields = [mockFieldViews[0], fillRule];
+      const updatedCipher = patchCipher.mock.lastCall[0](current);
       expect(updatedCipher.fields.map((field: FieldView) => field.name)).toEqual([
         "text label",
         "keykeeper.fill",

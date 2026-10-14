@@ -12,6 +12,7 @@ import {
 } from "@bitwarden/components";
 import {
   CopyCipherFieldDirective,
+  KeykeeperExpirationBadgeComponent,
   VaultItemCopyActionsComponent,
   Vfo1I18nPipe,
   Vfo1IconPipe,
@@ -41,6 +42,7 @@ import { VaultItemsComponent } from "./vault-items.component";
     PipesModule,
     CopyCipherFieldDirective,
     VaultItemCopyActionsComponent,
+    KeykeeperExpirationBadgeComponent,
     ScrollLayoutDirective,
     PremiumBadgeComponent,
     IconModule,

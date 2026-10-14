@@ -37,6 +37,7 @@ import {
   LinkComponent,
 } from "@bitwarden/components";
 
+import { KeykeeperExpirationViewComponent } from "../keykeeper/expiration-view.component";
 import { visibleCustomFields } from "../keykeeper/reserved-fields";
 
 import { AdditionalOptionsComponent } from "./additional-options/additional-options.component";
@@ -59,6 +60,7 @@ import { ViewIdentitySectionsComponent } from "./view-identity-sections/view-ide
   selector: "app-cipher-view",
   templateUrl: "cipher-view.component.html",
   imports: [
+    KeykeeperExpirationViewComponent,
     CalloutModule,
     CommonModule,
     SearchModule,
