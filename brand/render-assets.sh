@@ -43,8 +43,8 @@ square "#000000" > "$OUT/web/safari-pinned-tab.svg"
 NAME=$(python3 -c "import json; print(json.load(open('brand.json'))['name'])")
 wordmark() { # fill [class]
   local cls=""; [ -n "${2:-}" ] && cls=" class=\"$2\""
-  printf '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 284 43"><title>%s</title><path%s fill="%s" fill-rule="evenodd" transform="translate(2 3.5) scale(1.125)" d="%s"/><text%s fill="%s" x="42" y="32" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="30" font-weight="700">%s</text></svg>' \
-    "$NAME" "$cls" "$1" "$PATH_D" "$cls" "$1" "$NAME"
+  printf '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 284 43" data-brand="%s"><title>%s</title><path%s fill="%s" fill-rule="evenodd" transform="translate(2 3.5) scale(1.125)" d="%s"/><text%s fill="%s" x="42" y="32" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="30" font-weight="700">%s</text></svg>' \
+    "$NAME" "$NAME" "$cls" "$1" "$PATH_D" "$cls" "$1" "$NAME"
 }
 wordmark "$COLOR" > "$OUT/web/logo.svg"
 wordmark "#FFFFFF" > "$OUT/web/logo-white.svg"
@@ -53,7 +53,20 @@ wordmark "#1B1B1B" | rsvg-convert -w 568 -h 86 -o "$OUT/web/logo-dark@2x.png"
 wordmark "#FFFFFF" | rsvg-convert -w 568 -h 86 -o "$OUT/web/logo-white@2x.png"
 # For the shared logo component, colored by the app theme through CSS classes.
 wordmark "currentColor" "tw-fill-marketing-logo" > "$OUT/wordmark-themed.svg"
-printf '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 32" fill="none"><path class="tw-fill-fg-nav" fill-rule="evenodd" d="%s"/></svg>' "$PATH_D" > "$OUT/mark-themed.svg"
+printf '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 32" fill="none" data-brand="%s"><path class="tw-fill-fg-nav" fill-rule="evenodd" d="%s"/></svg>' "$NAME" "$PATH_D" > "$OUT/mark-themed.svg"
+
+# Product logos in the navigation: mark, name, and a product line underneath.
+# Colored by the nav theme through CSS classes, like upstream's.
+product_logo() { # subtitle out
+  printf '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 49" fill="none" data-brand="%s"><title>%s %s</title><path class="tw-fill-fg-nav" fill-rule="evenodd" transform="translate(0 6.5) scale(1.125)" d="%s"/><text class="tw-fill-fg-nav" x="38" y="25" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="24" font-weight="700">%s</text><text class="tw-fill-fg-nav" x="38" y="44" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="13" font-weight="500">%s</text></svg>' \
+    "$NAME" "$NAME" "$1" "$PATH_D" "$NAME" "$1" > "$2"
+}
+product_logo "Password Manager" "$OUT/logo-password-manager.svg"
+product_logo "Admin Console" "$OUT/logo-admin-console.svg"
+product_logo "Provider Portal" "$OUT/logo-provider-portal.svg"
+product_logo "Secrets Manager" "$OUT/logo-secrets-manager.svg"
+# Small square icon, used in onboarding and org lists.
+printf '<svg width="20" height="20" viewBox="-3 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" data-brand="%s"><path fill="%s" fill-rule="evenodd" d="%s"/></svg>' "$NAME" "$COLOR" "$PATH_D" > "$OUT/icon-square.svg"
 python3 - "$OUT/web" <<'PY'
 import sys
 from PIL import Image

@@ -136,6 +136,21 @@ function apply() {
     /const BitwardenShield = svg`[\s\S]*?`;/,
     `const BitwardenShield = svg\`${themedMark}\`;`,
   );
+  const svgModules = [
+    ["password-manager.ts", "const PasswordManagerLogo", "logo-password-manager.svg"],
+    ["admin-console.ts", "const AdminConsoleLogo", "logo-admin-console.svg"],
+    ["provider-portal.ts", "const ProviderPortalLogo", "logo-provider-portal.svg"],
+    ["secrets-manager.ts", "const SecretsManagerLogo", "logo-secrets-manager.svg"],
+    ["bitwarden-icon.ts", "export const BitwardenIcon", "icon-square.svg"],
+  ];
+  for (const [file, declaration, asset] of svgModules) {
+    const markup = fs.readFileSync(path.join(GEN, asset), "utf8");
+    replaceAnchored(
+      `libs/assets/src/svg/svgs/${file}`,
+      new RegExp(`${declaration} = svg\`[\\s\\S]*?\`;`),
+      `${declaration} = svg\`${markup}\`;`,
+    );
+  }
 
   // 4. Cloud regions: ours replace Bitwarden's US, EU, and Gov clouds.
   const u = BRAND.urls;
