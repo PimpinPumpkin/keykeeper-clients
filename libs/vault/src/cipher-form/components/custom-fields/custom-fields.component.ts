@@ -201,10 +201,10 @@ export class CustomFieldsComponent implements OnInit, AfterViewInit {
         newField: false,
       });
 
-      if (
-        field.type === FieldType.Hidden &&
-        !this.cipherFormContainer.originalCipherView?.viewPassword
-      ) {
+      // Keykeeper: only lock hidden fields of an existing item the person may not
+      // view. A new item (from a template, say) has no original and is theirs.
+      const original = this.cipherFormContainer.originalCipherView;
+      if (field.type === FieldType.Hidden && original != null && !original.viewPassword) {
         customField.controls.value.disable();
       }
 

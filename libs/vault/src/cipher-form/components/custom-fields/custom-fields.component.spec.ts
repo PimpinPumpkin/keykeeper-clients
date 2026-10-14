@@ -304,6 +304,26 @@ describe("CustomFieldsComponent", () => {
     });
   });
 
+  describe("a new item starting with fields (Keykeeper)", () => {
+    it("leaves its hidden fields editable", () => {
+      const hiddenField = new FieldView();
+      hiddenField.name = "Secret";
+      hiddenField.type = FieldType.Hidden;
+      hiddenField.value = "";
+      (
+        TestBed.inject(CipherFormContainer) as unknown as { originalCipherView: CipherView | null }
+      ).originalCipherView = null;
+      config.initialValues = { fields: [hiddenField] };
+      (TestBed.inject(CipherFormContainer).getInitialCipherView as jest.Mock).mockReturnValue(null);
+      component.fields.clear();
+
+      component.ngOnInit();
+
+      expect(component.fields.at(0).value.name).toBe("Secret");
+      expect(component.fields.at(0).controls.value.disabled).toBe(false);
+    });
+  });
+
   describe("Keykeeper's own fields", () => {
     let fillRule: FieldView;
 
