@@ -374,6 +374,7 @@ import { BackgroundBrowserBiometricsService } from "../key-management/biometrics
 import { BrowserSessionTimeoutTypeService } from "../key-management/session-timeout/services/browser-session-timeout-type.service";
 import { SHARED_UNLOCK_EXTERNAL } from "../key-management/shared-unlock-messages";
 import VaultTimeoutService from "../key-management/vault-timeout/vault-timeout.service";
+import { KeykeeperExpirationReminders } from "../keykeeper/expiration-reminders";
 import { BrowserActionsService } from "../platform/actions/browser-actions.service";
 import { DefaultBadgeBrowserApi } from "../platform/badge/badge-browser-api";
 import { BadgeService } from "../platform/badge/badge.service";
@@ -585,6 +586,8 @@ export default class MainBackground {
   private notificationBackground: NotificationBackground;
   private overlayBackground: OverlayBackgroundInterface;
   private overlayNotificationsBackground: OverlayNotificationsBackgroundInterface;
+  // Keykeeper
+  keykeeperExpirationReminders: KeykeeperExpirationReminders;
   private runtimeBackground: RuntimeBackground;
   private tabsBackground: TabsBackground;
   private webRequestBackground: WebRequestBackground;
@@ -1827,6 +1830,13 @@ export default class MainBackground {
     await this.runtimeBackground.init();
     await this.notificationBackground.init();
     this.overlayNotificationsBackground.init();
+    // Keykeeper: on-device reminders before items expire.
+    this.keykeeperExpirationReminders = new KeykeeperExpirationReminders(
+      this.authService,
+      this.accountService,
+      this.cipherService,
+    );
+    this.keykeeperExpirationReminders.init();
     this.commandsBackground.init();
     this.contextMenusBackground?.init();
     // Disable the side panel globally on startup so Bitwarden does not appear in

@@ -1,5 +1,5 @@
-import { FieldType } from "@bitwarden/common/vault/enums";
-import { FieldView } from "@bitwarden/common/vault/models/view/field.view";
+import { FieldType } from "../enums";
+import { FieldView } from "../models/view/field.view";
 
 import {
   cardExpiration,
