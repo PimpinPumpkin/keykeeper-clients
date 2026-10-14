@@ -23,6 +23,7 @@ import {
 } from "@bitwarden/components";
 
 import { VaultAutosizeReadOnlyTextArea } from "../../directives/readonly-textarea.directive";
+import { visibleCustomFields } from "../../keykeeper/reserved-fields";
 
 // FIXME(https://bitwarden.atlassian.net/browse/CL-764): Migrate to OnPush
 // eslint-disable-next-line @angular-eslint/prefer-on-push-component-change-detection
@@ -49,6 +50,11 @@ export class CustomFieldV2Component implements OnInit, OnChanges {
   @Input({ required: true }) cipher!: CipherView;
   fieldType = FieldType;
   fieldOptions: Map<number, LinkedMetadata> | undefined;
+
+  /** Keykeeper: the custom fields to show, without Keykeeper's own fields. */
+  get visibleFields() {
+    return visibleCustomFields(this.cipher.fields);
+  }
 
   /** Indexes of hidden fields that are revealed */
   revealedHiddenFields: number[] = [];

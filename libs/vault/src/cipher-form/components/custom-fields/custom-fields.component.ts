@@ -41,6 +41,7 @@ import {
   TypographyModule,
 } from "@bitwarden/components";
 
+import { keykeeperFields, visibleCustomFields } from "../../../keykeeper/reserved-fields";
 import { CipherFormContainer } from "../../cipher-form-container";
 
 import {
@@ -114,6 +115,9 @@ export class CustomFieldsComponent implements OnInit, AfterViewInit {
   /** True when edit/reorder toggles should be hidden based on partial-edit */
   isPartialEdit: boolean;
 
+  /** Keykeeper's own fields on the item, kept out of the form and restored on save. */
+  private keykeeperFields: FieldView[] = [];
+
   /** True when there are custom fields available */
   hasCustomFields = false;
 
@@ -180,8 +184,11 @@ export class CustomFieldsComponent implements OnInit, AfterViewInit {
 
     const prefillCipher = this.cipherFormContainer.getInitialCipherView();
 
+    // Keykeeper: its own fields are not shown here, and go back unchanged on save.
+    this.keykeeperFields = keykeeperFields(prefillCipher?.fields);
+
     // When available, populate the form with the existing fields
-    prefillCipher?.fields?.forEach((field) => {
+    visibleCustomFields(prefillCipher?.fields).forEach((field) => {
       let value: string | boolean = field.value;
 
       if (field.type === FieldType.Boolean) {
@@ -406,7 +413,7 @@ export class CustomFieldsComponent implements OnInit, AfterViewInit {
     this.numberOfFieldsChange.emit(newFields.length);
 
     this.cipherFormContainer.patchCipher((cipher) => {
-      cipher.fields = newFields;
+      cipher.fields = [...newFields, ...this.keykeeperFields];
       return cipher;
     });
   }

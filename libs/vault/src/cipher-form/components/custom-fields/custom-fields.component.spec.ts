@@ -304,6 +304,37 @@ describe("CustomFieldsComponent", () => {
     });
   });
 
+  describe("Keykeeper's own fields", () => {
+    let fillRule: FieldView;
+
+    beforeEach(() => {
+      fillRule = new FieldView();
+      fillRule.name = "keykeeper.fill";
+      fillRule.type = FieldType.Hidden;
+      fillRule.value = '{"v":1}';
+      originalCipherView.fields = [mockFieldViews[0], fillRule];
+
+      component.ngOnInit();
+    });
+
+    it("are not shown in the form", () => {
+      expect(component.fields.value.map((field: { name: string }) => field.name)).toEqual([
+        "text label",
+      ]);
+    });
+
+    it("are kept unchanged when another field changes", () => {
+      component.fields.at(0).patchValue({ value: "new text value" });
+
+      const updatedCipher = patchCipher.mock.lastCall[0](new CipherView());
+      expect(updatedCipher.fields.map((field: FieldView) => field.name)).toEqual([
+        "text label",
+        "keykeeper.fill",
+      ]);
+      expect(updatedCipher.fields[1]).toBe(fillRule);
+    });
+  });
+
   describe("updating a field", () => {
     beforeEach(() => {
       originalCipherView.fields = [mockFieldViews[0]];

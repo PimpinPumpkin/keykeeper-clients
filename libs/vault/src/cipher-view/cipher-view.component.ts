@@ -37,6 +37,8 @@ import {
   LinkComponent,
 } from "@bitwarden/components";
 
+import { visibleCustomFields } from "../keykeeper/reserved-fields";
+
 import { AdditionalOptionsComponent } from "./additional-options/additional-options.component";
 import { AttachmentsV2ViewComponent } from "./attachments/attachments-v2-view.component";
 import { AutofillOptionsViewComponent } from "./autofill-options/autofill-options-view.component";
@@ -83,6 +85,11 @@ export class CipherViewComponent {
    * The cipher to display details for
    */
   readonly cipher = input.required<CipherView>();
+
+  /** Keykeeper: show the custom fields section only for fields people can see. */
+  protected readonly hasVisibleCustomFields = computed(
+    () => visibleCustomFields(this.cipher()?.fields).length > 0,
+  );
 
   /**
    * Observable version of the cipher input

@@ -138,9 +138,9 @@ export function upsertFillRule(cipher: CipherView, rule: FillRule): void {
   cipher.fields = [...others, ruleField];
 }
 
-/** The custom fields a person sees on an item, without our rule fields. */
+/** The custom fields a person sees on an item, without any of Keykeeper's own fields. */
 export function visibleCustomFields(cipher: CipherView): FieldView[] {
-  return (cipher.fields ?? []).filter((field) => field.name !== FILL_RULE_FIELD_NAME);
+  return (cipher.fields ?? []).filter((field) => !(field.name ?? "").startsWith("keykeeper."));
 }
 
 /**

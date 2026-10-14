@@ -3,7 +3,7 @@
     <h2 bitTypography="h6">{{ "customFields" | i18n }}</h2>
   </bit-section-header>
   <bit-card>
-    @for (field of cipher.fields; track cipher.id; let last = $last, i = $index) {
+    @for (field of visibleFields; track cipher.id; let last = $last, i = $index) {
       <div
         class="tw-border-secondary-300 [&_bit-form-field:last-of-type]:tw-mb-0"
         [ngClass]="{ 'tw-mb-4': !last }"
