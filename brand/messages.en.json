@@ -1,0 +1,20 @@
+{
+  "keykeeperExpiringItemsReport": {
+    "message": "Expiring items"
+  },
+  "keykeeperExpiringItemsReportDesc": {
+    "message": "Items that have expired or expire in the next 30 days: API keys, certificates, licenses, cards, and anything you set an expiration date on."
+  },
+  "keykeeperNoExpiringItems": {
+    "message": "Nothing in your vault has expired or expires in the next 30 days."
+  },
+  "keykeeperExpiringItemsFound": {
+    "message": "Expiring items found"
+  },
+  "keykeeperExpiringItemsFoundDesc": {
+    "message": "These items have expired or expire in the next 30 days. Renew or rotate them, then update their expiration dates."
+  },
+  "keykeeperExpires": {
+    "message": "Expires"
+  }
+}

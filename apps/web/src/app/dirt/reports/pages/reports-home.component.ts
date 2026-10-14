@@ -66,6 +66,11 @@ export class ReportsHomeComponent implements OnInit {
         ...reports[ReportType.DataBreach],
         variant: ReportVariant.Enabled,
       },
+      // Keykeeper: expiring items, for everyone.
+      {
+        ...reports[ReportType.KeykeeperExpiringItems],
+        variant: ReportVariant.Enabled,
+      },
     ];
 
     if (passkeyReportEnabled) {

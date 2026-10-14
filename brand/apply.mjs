@@ -135,6 +135,26 @@ function apply() {
     write(rel, JSON.stringify(data, null, 2) + "\n");
   }
 
+  // 1b. Keykeeper's own strings, added to every app's English translations.
+  //     Other languages fall back to English until they are translated.
+  const ownMessages = JSON.parse(
+    fs.readFileSync(path.join(ROOT, "brand/messages.en.json"), "utf8"),
+  );
+  for (const rel of trackedFiles(
+    "apps/browser/src/_locales/en/messages.json",
+    "apps/web/src/locales/en/messages.json",
+    "apps/desktop/src/locales/en/messages.json",
+  )) {
+    const data = JSON.parse(read(rel).replace(/^\uFEFF/, ""));
+    for (const [key, value] of Object.entries(ownMessages)) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        fail(`${rel} already has a "${key}" message. Rename ours.`);
+      }
+      data[key] = value;
+    }
+    write(rel, JSON.stringify(data, null, 2) + "\n");
+  }
+
   // 2. Hard-coded text in HTML templates.
   let templates = 0;
   for (const rel of trackedFiles("apps/**/*.html", "apps/**/*.ejs", "libs/**/*.html")) {

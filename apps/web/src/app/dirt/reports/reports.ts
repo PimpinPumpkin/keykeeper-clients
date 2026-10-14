@@ -1,5 +1,6 @@
 import {
   BiometricFingerprint,
+  ItemTypes,
   NoCredentialsIcon,
   ReportBreach,
   ReportExposedPasswords,
@@ -22,6 +23,8 @@ export enum ReportType {
   DataBreach = "dataBreach",
   MemberAccessReport = "memberAccessReport",
   PasskeyLogin = "passkeyLogin",
+  // Keykeeper
+  KeykeeperExpiringItems = "keykeeperExpiringItems",
 }
 
 type ReportWithoutVariant = Omit<ReportEntry, "variant">;
@@ -74,5 +77,11 @@ export const reports: Record<ReportType, ReportWithoutVariant> = {
     description: "passkeyLoginReportMenuDesc",
     route: "passkey-report",
     icon: BiometricFingerprint,
+  },
+  [ReportType.KeykeeperExpiringItems]: {
+    title: "keykeeperExpiringItemsReport",
+    description: "keykeeperExpiringItemsReportDesc",
+    route: "expiring-items-report",
+    icon: ItemTypes,
   },
 };

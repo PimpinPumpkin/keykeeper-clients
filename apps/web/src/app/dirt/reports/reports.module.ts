@@ -11,6 +11,7 @@ import {
 import {
   CipherFormConfigService,
   DefaultCipherFormConfigService,
+  KeykeeperExpirationBadgeComponent,
   RoutedVaultFilterBridgeService,
   RoutedVaultFilterService,
   Vfo1IconPipe,
@@ -25,6 +26,7 @@ import { AdminConsoleCipherFormConfigService } from "../../vault/org-vault/servi
 import { BreachReportComponent } from "./pages/breach-report.component";
 import { ExposedPasswordsReportComponent } from "./pages/exposed-passwords-report.component";
 import { InactiveTwoFactorReportComponent } from "./pages/inactive-two-factor-report.component";
+import { KeykeeperExpiringItemsReportComponent } from "./pages/keykeeper-expiring-items-report.component";
 import { PasskeyReportComponent } from "./pages/passkey-report.component";
 import { ReportsHomeComponent } from "./pages/reports-home.component";
 import { ReusedPasswordsReportComponent } from "./pages/reused-passwords-report.component";
@@ -49,10 +51,12 @@ import { ReportsSharedModule } from "./shared";
     BerryComponent,
     PasskeyReportComponent,
     TooltipDirective,
+    KeykeeperExpirationBadgeComponent,
     Vfo1IconPipe,
   ],
   declarations: [
     BreachReportComponent,
+    KeykeeperExpiringItemsReportComponent,
     ExposedPasswordsReportComponent,
     InactiveTwoFactorReportComponent,
     ReportsLayoutComponent,

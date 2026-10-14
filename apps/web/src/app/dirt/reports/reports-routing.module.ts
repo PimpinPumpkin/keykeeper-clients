@@ -10,6 +10,7 @@ import { hasPremiumGuard } from "../../billing/guards/has-premium.guard";
 import { BreachReportComponent } from "./pages/breach-report.component";
 import { ExposedPasswordsReportComponent } from "./pages/exposed-passwords-report.component";
 import { InactiveTwoFactorReportComponent } from "./pages/inactive-two-factor-report.component";
+import { KeykeeperExpiringItemsReportComponent } from "./pages/keykeeper-expiring-items-report.component";
 import { PasskeyReportComponent } from "./pages/passkey-report.component";
 import { ReportsHomeComponent } from "./pages/reports-home.component";
 import { ReusedPasswordsReportComponent } from "./pages/reused-passwords-report.component";
@@ -28,6 +29,12 @@ const routes: Routes = [
         pathMatch: "full",
         component: ReportsHomeComponent,
         data: { titleId: "reports", homepage: true },
+      },
+      {
+        // Keykeeper
+        path: "expiring-items-report",
+        component: KeykeeperExpiringItemsReportComponent,
+        data: { titleId: "keykeeperExpiringItemsReport" },
       },
       {
         path: "breach-report",
