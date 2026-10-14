@@ -116,8 +116,9 @@
               <app-vault-icon [cipher]="cipher"></app-vault-icon>
             </div>
             <span data-testid="item-name">{{ cipher.name }}</span>
-            <!-- Keykeeper: expiration badge -->
+            <!-- Keykeeper: expiration and template badges -->
             <vault-keykeeper-expiration-badge [item]="cipher"></vault-keykeeper-expiration-badge>
+            <vault-keykeeper-template-badge [item]="cipher"></vault-keykeeper-template-badge>
             <div slot="default-trailing" class="tw-flex tw-gap-1.5">
               @if (cipher.organizationId) {
                 <i

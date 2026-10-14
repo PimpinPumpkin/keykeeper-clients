@@ -35,6 +35,7 @@ import {
   TypographyModule,
 } from "@bitwarden/components";
 
+import { KeykeeperTemplateHintComponent } from "../../keykeeper/template-hint.component";
 import { CipherFormConfig } from "../abstractions/cipher-form-config.service";
 import { CipherFormService } from "../abstractions/cipher-form.service";
 import { CipherForm, CipherFormContainer } from "../cipher-form-container";
@@ -82,6 +83,7 @@ import { SshKeySectionComponent } from "./sshkey-section/sshkey-section.componen
     AdditionalOptionsSectionComponent,
     LoginDetailsSectionComponent,
     NewItemNudgeComponent,
+    KeykeeperTemplateHintComponent,
   ],
 })
 export class CipherFormComponent implements AfterViewInit, OnInit, OnChanges, CipherFormContainer {

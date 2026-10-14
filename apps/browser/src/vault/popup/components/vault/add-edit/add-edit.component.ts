@@ -35,14 +35,20 @@ import {
   ToastService,
 } from "@bitwarden/components";
 import {
+  BUILT_IN_TEMPLATES,
   CipherFormComponent,
   CipherFormConfig,
   CipherFormConfigService,
   CipherFormGenerationService,
   CipherFormMode,
   CipherFormModule,
+  customTemplate,
   DefaultCipherFormConfigService,
+  ItemTemplate,
+  newTemplateDefinitionField,
   OptionalInitialValues,
+  TemplateBase,
+  templateFields,
   TotpCaptureService,
 } from "@bitwarden/vault";
 
@@ -95,6 +101,12 @@ class QueryParams {
     this.prefillNameAndURIFromTab = params.prefillNameAndURIFromTab;
     this.routeAfterDeletion = params.routeAfterDeletion ?? ROUTES_AFTER_EDIT_DELETION.tabsVault;
     this.fillAfterSave = params.fillAfterSave === "true";
+    this.keykeeperTemplate = params.keykeeperTemplate;
+    this.keykeeperTemplateItem = params.keykeeperTemplateItem;
+    this.keykeeperNewTemplate =
+      params.keykeeperNewTemplate === "login" || params.keykeeperNewTemplate === "note"
+        ? params.keykeeperNewTemplate
+        : undefined;
   }
 
   /**
@@ -159,6 +171,15 @@ class QueryParams {
    * Set when the add-edit form is opened from the inline menu context.
    */
   fillAfterSave?: boolean;
+
+  /** Keykeeper: start the new item from this built-in template. */
+  keykeeperTemplate?: string;
+
+  /** Keykeeper: start the new item from the custom template this item defines. */
+  keykeeperTemplateItem?: string;
+
+  /** Keykeeper: the new item is a custom template for logins or notes. */
+  keykeeperNewTemplate?: TemplateBase;
 }
 
 export type AddEditQueryParams = Partial<Record<keyof QueryParams, string>>;
@@ -511,6 +532,14 @@ export class AddEditComponent implements OnInit, OnDestroy {
       initialValues.name = params.name;
     }
 
+    // Keykeeper: starting fields from a template, or a new custom template.
+    const template = await this.keykeeperTemplate(params);
+    if (template) {
+      initialValues.fields = templateFields(template);
+    } else if (params.keykeeperNewTemplate) {
+      initialValues.fields = [newTemplateDefinitionField(params.keykeeperNewTemplate)];
+    }
+
     if (params.prefillNameAndURIFromTab) {
       const tab = await BrowserApi.getTabFromCurrentWindow();
 
@@ -519,6 +548,19 @@ export class AddEditComponent implements OnInit, OnDestroy {
     }
 
     return initialValues;
+  }
+
+  private async keykeeperTemplate(params: QueryParams): Promise<ItemTemplate | null> {
+    if (params.keykeeperTemplate) {
+      return BUILT_IN_TEMPLATES.find((t) => t.id === params.keykeeperTemplate) ?? null;
+    }
+    if (params.keykeeperTemplateItem) {
+      const userId = await firstValueFrom(this.userId$);
+      const items = await this.cipherService.getAllDecrypted(userId);
+      const item = items.find((c) => c.id === params.keykeeperTemplateItem);
+      return item ? customTemplate(item) : null;
+    }
+    return null;
   }
 
   setHeader(mode: CipherFormMode, type: CipherType) {

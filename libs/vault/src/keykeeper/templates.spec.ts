@@ -1,10 +1,17 @@
 import { CipherType, FieldType } from "@bitwarden/common/vault/enums";
+import { FieldView } from "@bitwarden/common/vault/models/view/field.view";
 
 import {
   BUILT_IN_TEMPLATES,
+  customTemplate,
+  customTemplates,
+  newTemplateDefinitionField,
+  TEMPLATE_DEFINITION_FIELD_NAME,
   TEMPLATE_FIELD_NAME,
   templateCipherType,
+  templateDefinition,
   templateFields,
+  templateGroups,
   templateOf,
 } from "./templates";
 
@@ -33,7 +40,7 @@ describe("Keykeeper item templates", () => {
       ["Secret", FieldType.Hidden, ""],
       ["Service URL", FieldType.Text, ""],
       ["Scopes", FieldType.Text, ""],
-      [TEMPLATE_FIELD_NAME, FieldType.Text, '{"id":"api-key","v":1}'],
+      [TEMPLATE_FIELD_NAME, FieldType.Text, '{"id":"api-key","name":"API key","v":1}'],
     ]);
     expect(templateFields(domain).find((f) => f.name === "Auto-renew")).toMatchObject({
       type: FieldType.Boolean,
@@ -43,10 +50,163 @@ describe("Keykeeper item templates", () => {
 
   it("can tell which template an item came from", () => {
     expect(templateOf({ fields: templateFields(apiKey) })).toBe(apiKey);
+    // Items from before the name was recorded.
+    expect(
+      templateOf({ fields: [{ name: TEMPLATE_FIELD_NAME, value: '{"id":"api-key","v":1}' }] }),
+    ).toBe(apiKey);
     expect(templateOf({ fields: [] })).toBeNull();
     expect(templateOf({ fields: [{ name: TEMPLATE_FIELD_NAME, value: "not json" }] })).toBeNull();
     expect(
       templateOf({ fields: [{ name: TEMPLATE_FIELD_NAME, value: '{"id":"gone"}' }] }),
     ).toBeNull();
+  });
+});
+
+function field(name: string, type: FieldType, value: string): FieldView {
+  const f = new FieldView();
+  f.name = name;
+  f.type = type;
+  f.value = value;
+  return f;
+}
+
+const laptopTemplate = {
+  id: "cipher-1",
+  name: " Client laptop ",
+  type: CipherType.SecureNote,
+  organizationId: "org-1",
+  fields: [
+    field("Asset tag", FieldType.Text, ""),
+    field("BitLocker recovery key", FieldType.Hidden, ""),
+    field("Site", FieldType.Text, "Main office"),
+    field("Encrypted", FieldType.Boolean, "true"),
+    newTemplateDefinitionField("login", "4f6c8a3e-1d2b-4c5a-9e7f-0a1b2c3d4e5f"),
+  ],
+};
+
+describe("Keykeeper custom templates", () => {
+  it("are notes whose name and custom fields are the template", () => {
+    const template = customTemplate(laptopTemplate)!;
+
+    expect(template).toMatchObject({
+      id: "4f6c8a3e-1d2b-4c5a-9e7f-0a1b2c3d4e5f",
+      name: "Client laptop",
+      base: "login",
+      source: { cipherId: "cipher-1", organizationId: "org-1" },
+    });
+    expect(template.fields).toEqual([
+      { label: "Asset tag", kind: "text", value: "" },
+      { label: "BitLocker recovery key", kind: "hidden", value: "" },
+      { label: "Site", kind: "text", value: "Main office" },
+      { label: "Encrypted", kind: "boolean", value: "true" },
+    ]);
+  });
+
+  it("give new items their fields and defaults, and their name", () => {
+    const template = customTemplate(laptopTemplate)!;
+    const fields = templateFields(template);
+
+    expect(templateCipherType(template)).toBe(CipherType.Login);
+    expect(fields.map((f) => [f.name, f.type, f.value])).toEqual([
+      ["Asset tag", FieldType.Text, ""],
+      ["BitLocker recovery key", FieldType.Hidden, ""],
+      ["Site", FieldType.Text, "Main office"],
+      ["Encrypted", FieldType.Boolean, "true"],
+      [
+        TEMPLATE_FIELD_NAME,
+        FieldType.Text,
+        '{"id":"4f6c8a3e-1d2b-4c5a-9e7f-0a1b2c3d4e5f","name":"Client laptop","v":1}',
+      ],
+    ]);
+    // Never the definition itself, which would make the new item a template.
+    expect(fields.some((f) => f.name === TEMPLATE_DEFINITION_FIELD_NAME)).toBe(false);
+    // Known by name, even to someone who can't see the template.
+    expect(templateOf({ fields })).toEqual({
+      id: "4f6c8a3e-1d2b-4c5a-9e7f-0a1b2c3d4e5f",
+      name: "Client laptop",
+      icon: "bwi-file-text",
+    });
+  });
+
+  it("skip linked fields, which belong to one item", () => {
+    const linked = field("Linked", FieldType.Linked, "");
+    const template = customTemplate({
+      ...laptopTemplate,
+      fields: [...laptopTemplate.fields, linked],
+    });
+
+    expect(template!.fields.map((f) => f.label)).not.toContain("Linked");
+  });
+
+  it("ignore anything that isn't a live note with a valid definition", () => {
+    const withDefinition = (value: string) => ({
+      ...laptopTemplate,
+      fields: [field(TEMPLATE_DEFINITION_FIELD_NAME, FieldType.Text, value)],
+    });
+
+    expect(customTemplate({ ...laptopTemplate, type: CipherType.Login })).toBeNull();
+    expect(customTemplate({ ...laptopTemplate, deletedDate: new Date() })).toBeNull();
+    expect(customTemplate({ ...laptopTemplate, fields: [] })).toBeNull();
+    for (const bad of [
+      "not json",
+      "[]",
+      '{"id":"x","base":"login"}',
+      '{"id":"x","base":"card","v":1}',
+      '{"id":"has spaces","base":"note","v":1}',
+      `{"id":"${"a".repeat(65)}","base":"note","v":1}`,
+      '{"id":7,"base":"note","v":1}',
+      '{"id":"x","base":"note","v":2}',
+    ]) {
+      expect(customTemplate(withDefinition(bad))).toBeNull();
+    }
+    expect(templateDefinition(withDefinition('{"id":"x","base":"note","v":1}'))).toEqual({
+      id: "x",
+      base: "note",
+    });
+  });
+
+  it("are listed by name, with a fallback for an unnamed one", () => {
+    const named = (name: string) => ({ ...laptopTemplate, name });
+
+    expect(customTemplates([named("Wi-Fi"), named(""), named("Asset")]).map((t) => t.name)).toEqual(
+      ["Asset", "Untitled template", "Wi-Fi"],
+    );
+  });
+
+  it("each get a fresh id", () => {
+    const a = templateDefinition({ fields: [newTemplateDefinitionField("note")] });
+    const b = templateDefinition({ fields: [newTemplateDefinitionField("note")] });
+
+    expect(a!.id).not.toBe(b!.id);
+    expect(a!.base).toBe("note");
+  });
+
+  it("are offered by organization, then the person's own, then built-in", () => {
+    const template = (name: string, organizationId: string | null) => ({
+      ...laptopTemplate,
+      id: name,
+      name,
+      organizationId,
+    });
+    const groups = templateGroups(
+      [
+        template("Zeta laptop", "org-z"),
+        template("Alpha server", "org-a"),
+        template("My Wi-Fi", null),
+        template("Orphan", "org-gone"),
+      ],
+      [
+        { id: "org-z", name: "Zeta Dental" },
+        { id: "org-a", name: "Acme Law" },
+        { id: "org-empty", name: "Empty Org" },
+      ],
+    );
+
+    expect(groups.map((g) => [g.name, g.templates.map((t) => t.name)])).toEqual([
+      ["Acme Law", ["Alpha server"]],
+      ["Zeta Dental", ["Zeta laptop"]],
+      ["My templates", ["My Wi-Fi"]],
+      ["Built-in", BUILT_IN_TEMPLATES.map((t) => t.name)],
+    ]);
   });
 });

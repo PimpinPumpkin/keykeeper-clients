@@ -117,3 +117,5 @@ export * from "./keykeeper/expiration-badge.component";
 export * from "./keykeeper/reserved-fields";
 export * from "./keykeeper/templates";
 export * from "./keykeeper/template-picker-dialog.component";
+export * from "./keykeeper/template-badge.component";
+export * from "./keykeeper/template-chooser.component";

@@ -123,6 +123,15 @@ export class NewItemDropdownComponent implements OnInit {
     };
   }
 
+  /** Keykeeper: where the item from a template goes, as for any new item. */
+  templateQueryParams(): AddEditQueryParams {
+    return {
+      collectionId: this.initialValues?.collectionId,
+      organizationId: this.initialValues?.organizationId,
+      folderId: this.initialValues?.folderId,
+    };
+  }
+
   openFolderDialog() {
     AddEditFolderDialogComponent.open(this.dialogService);
   }

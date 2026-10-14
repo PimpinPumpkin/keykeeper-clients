@@ -110,6 +110,7 @@ import {
   DefaultVaultItemsTransferService,
   FolderFilter,
   KeykeeperTemplatePickerDialogComponent,
+  newTemplateDefinitionField,
   openBulkMoveDialog,
   OrganizationFilter,
   PasswordRepromptService,
@@ -1052,13 +1053,18 @@ export class VaultComponent<C extends CipherViewLike> implements OnInit, OnDestr
    * Opens the add cipher dialog.
    * @param cipherType The type of cipher to add.
    */
-  /** Keykeeper: pick a template, then open a new item with its fields. */
+  /**
+   * Keykeeper: pick a template, then open a new item with its fields. Or start
+   * a new custom template, which is a note with a template definition.
+   */
   async addFromTemplate() {
-    const template = await firstValueFrom(
+    const result = await firstValueFrom(
       KeykeeperTemplatePickerDialogComponent.open(this.dialogService).closed,
     );
-    if (template) {
-      await this.addCipher(templateCipherType(template), templateFields(template));
+    if (result?.kind === "use") {
+      await this.addCipher(templateCipherType(result.template), templateFields(result.template));
+    } else if (result?.kind === "create") {
+      await this.addCipher(CipherType.SecureNote, [newTemplateDefinitionField(result.base)]);
     }
   }
 

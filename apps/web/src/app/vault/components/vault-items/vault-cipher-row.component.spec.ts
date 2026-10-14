@@ -24,6 +24,8 @@ import { IconButtonModule, MenuModule } from "@bitwarden/components";
 import {
   CopyCipherFieldDirective,
   CopyCipherFieldService,
+  KeykeeperExpirationBadgeComponent,
+  KeykeeperTemplateBadgeComponent,
   OrganizationNameBadgeComponent,
   VaultCopyButtonsService,
 } from "@bitwarden/vault";
@@ -63,6 +65,8 @@ describe("VaultCipherRowComponent", () => {
         CopyCipherFieldDirective,
         OrganizationNameBadgeComponent,
         PremiumBadgeComponent,
+        KeykeeperExpirationBadgeComponent,
+        KeykeeperTemplateBadgeComponent,
       ],
       providers: [
         { provide: I18nService, useValue: { t: (key: string) => key } },

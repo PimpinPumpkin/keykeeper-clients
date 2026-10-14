@@ -1,32 +1,27 @@
-import { ChangeDetectionStrategy, Component } from "@angular/core";
+import { ChangeDetectionStrategy, Component, signal } from "@angular/core";
 
 import { ButtonModule, DialogModule, DialogRef, DialogService } from "@bitwarden/components";
 
-import { BUILT_IN_TEMPLATES, ItemTemplate } from "./templates";
+import { KeykeeperTemplateChooserComponent } from "./template-chooser.component";
+import { ItemTemplate, TemplateBase } from "./templates";
 
-/** Keykeeper: choose a template for a new item. Closes with the chosen template. */
+export type TemplatePickerResult =
+  { kind: "use"; template: ItemTemplate } | { kind: "create"; base: TemplateBase };
+
+/** Keykeeper: choose a template for a new item, or start a new custom template. */
 @Component({
   selector: "vault-keykeeper-template-picker-dialog",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ButtonModule, DialogModule],
+  imports: [ButtonModule, DialogModule, KeykeeperTemplateChooserComponent],
   template: `
     <bit-dialog dialogSize="small">
-      <span bitDialogTitle>New item from a template</span>
+      <span bitDialogTitle>{{ creating() ? "New template" : "New item from a template" }}</span>
       <div bitDialogContent>
-        <ul class="tw-m-0 tw-list-none tw-p-0">
-          @for (template of templates; track template.id) {
-            <li>
-              <button
-                type="button"
-                class="tw-flex tw-w-full tw-items-center tw-gap-3 tw-rounded tw-border-none tw-bg-transparent tw-p-2 tw-text-left hover:tw-bg-bg-secondary"
-                (click)="choose(template)"
-              >
-                <i class="bwi bwi-fw {{ template.icon }}" aria-hidden="true"></i>
-                <span>{{ template.name }}</span>
-              </button>
-            </li>
-          }
-        </ul>
+        <vault-keykeeper-template-chooser
+          [(creating)]="creating"
+          (chosen)="choose($event)"
+          (createRequested)="create($event)"
+        ></vault-keykeeper-template-chooser>
       </div>
       <ng-container bitDialogFooter>
         <button bitButton buttonType="secondary" type="button" bitDialogClose>Cancel</button>
@@ -35,15 +30,19 @@ import { BUILT_IN_TEMPLATES, ItemTemplate } from "./templates";
   `,
 })
 export class KeykeeperTemplatePickerDialogComponent {
-  protected readonly templates = BUILT_IN_TEMPLATES;
+  protected readonly creating = signal(false);
 
-  constructor(private readonly dialogRef: DialogRef<ItemTemplate>) {}
+  constructor(private readonly dialogRef: DialogRef<TemplatePickerResult>) {}
 
   protected choose(template: ItemTemplate) {
-    void this.dialogRef.close(template);
+    void this.dialogRef.close({ kind: "use", template });
+  }
+
+  protected create(base: TemplateBase) {
+    void this.dialogRef.close({ kind: "create", base });
   }
 
   static open(dialogService: DialogService) {
-    return dialogService.open<ItemTemplate>(KeykeeperTemplatePickerDialogComponent);
+    return dialogService.open<TemplatePickerResult>(KeykeeperTemplatePickerDialogComponent);
   }
 }

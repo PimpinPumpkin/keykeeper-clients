@@ -87,6 +87,7 @@ import { AddEditComponent } from "../vault/popup/components/vault/add-edit/add-e
 import { AssignCollections } from "../vault/popup/components/vault/assign-collections/assign-collections.component";
 import { AttachmentsComponent } from "../vault/popup/components/vault/attachments/attachments.component";
 import { IntroCarouselComponent } from "../vault/popup/components/vault/intro-carousel/intro-carousel.component";
+import { KeykeeperTemplatesPageComponent } from "../vault/popup/components/vault/keykeeper-templates-page/keykeeper-templates-page.component";
 import { NewItemPageComponent } from "../vault/popup/components/vault/new-item-page/new-item-page.component";
 import { PasswordHistoryComponent } from "../vault/popup/components/vault/vault-password-history/vault-password-history.component";
 import { VaultComponent } from "../vault/popup/components/vault/vault.component";
@@ -240,6 +241,13 @@ const routes: Routes = [
       authGuard,
       canAccessFeature(FeatureFlag.PM32009NewItemTypes, true, undefined, false),
     ],
+    data: { elevation: 1 } satisfies RouteDataProperties,
+  },
+  {
+    // Keykeeper: new items from templates
+    path: "keykeeper-templates",
+    component: KeykeeperTemplatesPageComponent,
+    canActivate: [authGuard],
     data: { elevation: 1 } satisfies RouteDataProperties,
   },
   {

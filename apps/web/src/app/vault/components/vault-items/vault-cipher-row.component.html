@@ -36,11 +36,15 @@
     >
       {{ cipher.name }}
     </button>
-    <!-- Keykeeper: expiration badge -->
+    <!-- Keykeeper: expiration and template badges -->
     <vault-keykeeper-expiration-badge
       class="tw-ml-2"
       [item]="cipher"
     ></vault-keykeeper-expiration-badge>
+    <vault-keykeeper-template-badge
+      class="tw-ml-2"
+      [item]="cipher"
+    ></vault-keykeeper-template-badge>
     @if (hasAttachments) {
       <ng-container>
         <i
