@@ -7,7 +7,7 @@ paths:
 
 # Tailwind
 
-Distilled from [Web Code Style — Tailwind](https://contributing.bitwarden.com/contributing/code-style/web/tailwind). The `tw-` prefix rule lives in the root [CLAUDE.md](../CLAUDE.md) so it loads on every session.
+Distilled from [Web Code Style — Tailwind](https://contributing.bitwarden.com/contributing/code-style/web/tailwind). The `tw-` prefix rule lives in the root [AGENTS.md](../AGENTS.md) so it loads on every session.
 
 ## No Arbitrary Values
 

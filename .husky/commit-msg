@@ -1,0 +1,5 @@
+# Keykeeper: no co-author trailers or generated-with lines in commit messages.
+if grep -iqE "^co-authored-by:|generated with" "$1"; then
+  echo "commit refused: remove the co-author trailer or generated-with line and commit again." >&2
+  exit 1
+fi

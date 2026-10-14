@@ -22,7 +22,7 @@ Code in this directory runs as **injected content scripts**, not within the Angu
 
 - Content scripts cannot import the `BrowserApi` abstraction required elsewhere in the browser extension
 - Direct use of `chrome.*` / `browser.*` APIs (e.g., `chrome.runtime.sendMessage`) is expected here
-- This is an exception to the `BrowserApi` rule in the parent `apps/browser/CLAUDE.md`
+- This is an exception to the `BrowserApi` rule in the parent `apps/browser/AGENTS.md`
 
 ## Cross-Browser Compatibility
 
