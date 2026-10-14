@@ -314,6 +314,32 @@ ${scale}
     /export const logoLockedIcon =\s*'[^']*';/,
     `export const logoLockedIcon =\n  ${inlineIcon(16, "#8A8A8A")};`,
   );
+  // 10. Upstream's icon font has a brand shield glyph (and a plain shield used
+  //     as the brand in places). Draw our mark instead, in the text color.
+  const iconCss = "libs/angular/src/scss/bwicons/styles/style.css";
+  if (!/\.bwi-bitwarden-shield:before/.test(read(iconCss)))
+    fail(`${iconCss} has no brand shield glyph anymore.`);
+  const maskSvg = encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 0 32 32"><path fill="black" fill-rule="evenodd" d="${markPath}"/></svg>`,
+  );
+  write(
+    iconCss,
+    read(iconCss) +
+      `
+/* ${BRAND.name}: the brand shield glyphs draw our mark. Added by brand/apply.mjs. */
+.bwi-bitwarden-shield:before,
+.bwi-shield:before {
+  content: "" !important;
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,${maskSvg}") center / contain no-repeat;
+  mask: url("data:image/svg+xml,${maskSvg}") center / contain no-repeat;
+}
+`,
+  );
+
   replaceAnchored(
     "apps/browser/src/autofill/content/components/icons/shield.ts",
     /viewBox="0 0 14 16"([\s\S]*?)d="[^"]*"/,
