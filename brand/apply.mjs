@@ -272,6 +272,7 @@ ${scale}
   --color-primary-300: ${rgb(palette["400"])};
   --color-primary-600: ${rgb(palette["700"])};
   --color-primary-700: ${rgb(palette["800"])};
+  --color-marketing-logo: ${rgb(palette["700"])};
 }
 .theme_dark {
   --color-primary-100: ${rgb(palette["950"])};
