@@ -32,6 +32,13 @@
     }
   </app-header>
 
+  <!-- Keykeeper: the MSP that manages this organization, if any -->
+  <app-keykeeper-client-msp-banner
+    class="tw-mb-4 tw-block"
+    [organization]="organization"
+    (removed)="load(organization)"
+  ></app-keykeeper-client-msp-banner>
+
   <div class="tw-mb-4">
     @if (showUserManagementControls()) {
       <bit-toggle-group

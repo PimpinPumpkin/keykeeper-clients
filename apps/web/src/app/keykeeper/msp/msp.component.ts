@@ -8,6 +8,7 @@ import { ErrorResponse } from "@bitwarden/common/models/response/error.response"
 import { EnvironmentService } from "@bitwarden/common/platform/abstractions/environment.service";
 import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.service";
 import { PlatformUtilsService } from "@bitwarden/common/platform/abstractions/platform-utils.service";
+import { SyncService } from "@bitwarden/common/platform/sync";
 import { PasswordStrengthServiceAbstraction } from "@bitwarden/common/tools/password-strength";
 import { CipherService } from "@bitwarden/common/vault/abstractions/cipher.service";
 import { DialogService, ToastService } from "@bitwarden/components";
@@ -312,6 +313,7 @@ export class KeykeeperMspComponent implements OnInit {
     private readonly accountService: AccountService,
     private readonly cipherService: CipherService,
     private readonly passwordStrengthService: PasswordStrengthServiceAbstraction,
+    private readonly syncService: SyncService,
   ) {}
 
   async ngOnInit() {
@@ -458,6 +460,8 @@ export class KeykeeperMspComponent implements OnInit {
 
   private async computeHealth(msp: MspDetails) {
     try {
+      // Picks up items added elsewhere, such as in a client's admin console.
+      await this.syncService.fullSync(false);
       const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
       const ciphers = await this.cipherService.getAllDecrypted(userId);
       this.health.set(

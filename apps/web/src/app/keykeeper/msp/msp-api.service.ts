@@ -41,6 +41,11 @@ export type MspDetails = MspSummary & { staff: MspStaffMember[]; clients: MspCli
 
 export type ClientEnrollment = { token: string | null; createdAt: string | null; joins: number };
 
+export type ClientMsp = {
+  msp: { id: string; name: string } | null;
+  staff: { memberId: string; email: string; name: string | null }[];
+};
+
 type Pending = { organizationId: string; memberId: string; email: string; publicKey: string };
 
 @Injectable({ providedIn: "root" })
@@ -122,6 +127,22 @@ export class KeykeeperMspApiService {
       null,
       true,
       true,
+    );
+  }
+
+  /** For a client's owners and admins: the MSP that manages the organization, and its staff there. */
+  async getOrganizationMsp(orgId: string): Promise<ClientMsp> {
+    return this.apiService.send("GET", `/keykeeper/organizations/${orgId}/msp`, null, true, true);
+  }
+
+  /** For a client's own owners: removes the MSP and all of its staff from the organization. */
+  async removeOrganizationMsp(orgId: string): Promise<void> {
+    await this.apiService.send(
+      "DELETE",
+      `/keykeeper/organizations/${orgId}/msp`,
+      null,
+      true,
+      false,
     );
   }
 
