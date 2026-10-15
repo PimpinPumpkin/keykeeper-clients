@@ -34,6 +34,8 @@ export function describeEvent(e: MspEvent): string {
       return `${actor} cancelled the invitation for ${target}`;
     case "staff_role_changed":
       return `${actor} made ${target} ${roleName(e.detail)}`;
+    case "staff_access_changed":
+      return `${actor} set ${target}'s access: ${e.detail ?? "changed"}`;
     case "staff_removed":
       return `${actor} removed ${target} from the MSP and every client`;
     case "install_token_replaced":

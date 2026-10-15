@@ -33,17 +33,60 @@ export type MspClient = {
   createdAt: string;
   preset: "business" | null;
   members: { confirmed: number; accepted: number; invited: number; revoked: number };
-  /** The caller's own membership there, if any. Status 2 is confirmed. */
-  you: { memberId: string; status: number; type: number } | null;
+  /**
+   * The caller's own membership there, if any. Status 2 is confirmed; type 0 is
+   * owner and 1 admin. vaultItems: whether they see every item there.
+   */
+  you: { memberId: string; status: number; type: number; vaultItems?: boolean } | null;
 };
 
-export type MspStaffMember = { userId: string; email: string; name: string | null; role: MspRole };
+/** The custom role permissions the server enforces. */
+export type CustomPermissions = {
+  manageUsers: boolean;
+  manageResetPassword: boolean;
+  managePolicies: boolean;
+  accessEventLogs: boolean;
+  accessImportExport: boolean;
+};
 
-export type MspInvite = { id: string; email: string; role: MspRole; createdAt: string };
+/**
+ * What a technician gets in the MSP's clients: every client or chosen ones,
+ * admin or a custom role inside them, and whether they see install commands.
+ * MSP admins are owners of every client, so they have none.
+ */
+export type TechnicianAccess = {
+  allClients: boolean;
+  /** With allClients false, the clients they reach. */
+  clients: string[];
+  /** A custom role in each client, or null for admin. vaultItems: every item there. */
+  custom: { permissions: CustomPermissions; vaultItems: boolean } | null;
+  installCommands: boolean;
+};
+
+export type MspStaffMember = {
+  userId: string;
+  email: string;
+  name: string | null;
+  role: MspRole;
+  /** A technician's access. Only MSP admins see it. */
+  access: TechnicianAccess | null;
+};
+
+export type MspInvite = {
+  id: string;
+  email: string;
+  role: MspRole;
+  /** The access a technician gets on joining. Only MSP admins see it. */
+  access: TechnicianAccess | null;
+  createdAt: string;
+};
 
 export type MspDetails = MspSummary & {
+  /** A technician's own access; null for MSP admins. Older servers leave it out. */
+  access?: TechnicianAccess | null;
   staff: MspStaffMember[];
   invites: MspInvite[];
+  /** For a technician limited to chosen clients, just those. */
   clients: MspClient[];
 };
 
@@ -185,11 +228,32 @@ export class KeykeeperMspApiService {
     );
   }
 
-  async addStaff(mspId: string, email: string, role: MspRole): Promise<AddStaffResult> {
+  /** Adds someone to the staff. A technician gets `access`, or every client as admin without it. */
+  async addStaff(
+    mspId: string,
+    email: string,
+    role: MspRole,
+    access?: TechnicianAccess,
+  ): Promise<AddStaffResult> {
     return this.apiService.send(
       "POST",
       `/keykeeper/msp/${mspId}/staff`,
-      { email, role },
+      { email, role, access: role === "technician" ? access : undefined },
+      true,
+      true,
+    );
+  }
+
+  /** Changes a technician's access, in every client at once. */
+  async setAccess(
+    mspId: string,
+    userId: string,
+    access: TechnicianAccess,
+  ): Promise<TechnicianAccess> {
+    return this.apiService.send(
+      "PUT",
+      `/keykeeper/msp/${mspId}/staff/${userId}/access`,
+      access,
       true,
       true,
     );

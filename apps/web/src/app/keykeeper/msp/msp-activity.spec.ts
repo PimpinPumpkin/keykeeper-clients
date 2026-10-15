@@ -56,6 +56,13 @@ describe("MSP activity sentences", () => {
       { event: "staff_invited", detail: "admin" },
       "ana@northwind.test invited ben@northwind.test to join as an admin",
     ],
+    [
+      {
+        event: "staff_access_changed",
+        detail: "Acme Dental, custom role (manage users), no vault items, no install commands",
+      },
+      "ana@northwind.test set ben@northwind.test's access: Acme Dental, custom role (manage users), no vault items, no install commands",
+    ],
     [{ event: "something_new" }, "something_new by ana@northwind.test"],
   ])("%j reads as %s", (fields, sentence) => {
     expect(describeEvent(event(fields))).toBe(sentence);
