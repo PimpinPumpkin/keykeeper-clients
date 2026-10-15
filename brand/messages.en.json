@@ -16,5 +16,8 @@
   },
   "keykeeperExpires": {
     "message": "Expires"
+  },
+  "keykeeperMspConsole": {
+    "message": "MSP console"
   }
 }

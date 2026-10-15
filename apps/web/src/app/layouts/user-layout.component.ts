@@ -4,7 +4,7 @@ import { CommonModule } from "@angular/common";
 import { Component, computed, inject, OnInit, Signal } from "@angular/core";
 import { toSignal } from "@angular/core/rxjs-interop";
 import { RouterModule } from "@angular/router";
-import { map, Observable, switchMap } from "rxjs";
+import { catchError, from, map, Observable, of, switchMap } from "rxjs";
 
 import { JslibModule } from "@bitwarden/angular/jslib.module";
 import { PasswordManagerLogo } from "@bitwarden/assets/svg";
@@ -18,6 +18,7 @@ import { SendPolicyService } from "@bitwarden/send-ui";
 import { PremiumSubscriptionRoutingService } from "@bitwarden/web-vault/app/billing/individual/services/premium-subscription-routing.service";
 
 import { BillingFreeFamiliesNavItemComponent } from "../billing/shared/billing-free-families-nav-item.component";
+import { KeykeeperMspApiService } from "../keykeeper/msp/msp-api.service";
 import { CoachmarkComponent, CoachmarkService } from "../vault/components/coachmark";
 
 import { WebLayoutModule } from "./web-layout.module";
@@ -55,6 +56,15 @@ export class UserLayoutComponent implements OnInit {
 
   protected readonly reportsCoachmarkOpen = computed(
     () => this.coachmarkService.activeStepId() === "monitorSecurity",
+  );
+
+  /** Keykeeper: the MSP console shows in the nav for MSP staff. */
+  protected readonly showMspConsole = toSignal(
+    from(inject(KeykeeperMspApiService).list()).pipe(
+      map((msps) => msps.length > 0),
+      catchError(() => of(false)),
+    ),
+    { initialValue: false },
   );
 
   /** Expand tools nav group when import coachmark is active */
