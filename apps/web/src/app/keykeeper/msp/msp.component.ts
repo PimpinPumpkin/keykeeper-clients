@@ -103,6 +103,7 @@ const CONFIRMED = 2;
                     @if (m.role === "admin") {
                       <select
                         bitInput
+                        class="tw-min-w-36"
                         [attr.aria-label]="'Role for ' + person.email"
                         [value]="person.role"
                         (change)="changeRole(person, $any($event.target).value)"
@@ -139,7 +140,7 @@ const CONFIRMED = 2;
                 <bit-label>Email of someone to add</bit-label>
                 <input bitInput type="email" formControlName="email" />
               </bit-form-field>
-              <bit-form-field disableMargin>
+              <bit-form-field disableMargin class="tw-min-w-36">
                 <bit-label>Role</bit-label>
                 <select bitInput formControlName="role">
                   <option value="technician">Technician</option>
