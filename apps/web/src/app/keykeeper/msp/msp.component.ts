@@ -29,20 +29,24 @@ import {
   MspDetails,
   MspRole,
   MspStaffMember,
+  TechnicianAccess,
 } from "./msp-api.service";
+import { DEFAULT_ACCESS, describeAccess, reachesEveryClient } from "./technician-access";
+import { KeykeeperTechnicianAccessEditorComponent } from "./technician-access-editor.component";
 
 const CONFIRMED = 2;
 const EVENTS_PER_PAGE = 50;
 
 /**
  * Keykeeper: the MSP console. Every client at a glance, with a way into each
- * client's admin console, plus the MSP's staff. Opening it confirms anyone
- * waiting for an org key that the signed-in person can give.
+ * client's admin console, plus the MSP's staff and what each technician can
+ * reach. Opening it confirms anyone waiting for an org key that the signed-in
+ * person can give.
  */
 @Component({
   selector: "app-keykeeper-msp",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SharedModule, HeaderModule],
+  imports: [SharedModule, HeaderModule, KeykeeperTechnicianAccessEditorComponent],
   template: `
     <app-header></app-header>
     <bit-container>
@@ -116,17 +120,19 @@ const EVENTS_PER_PAGE = 50;
                     <td bitCell data-testid="msp-client-weak">{{ clientHealth.weak }}</td>
                     <td bitCell data-testid="msp-client-reused">{{ clientHealth.reused }}</td>
                     <td bitCell class="tw-text-right">
-                      <button
-                        type="button"
-                        bitLink
-                        class="tw-mr-4"
-                        [attr.aria-expanded]="installFor()?.client.id === client.id"
-                        (click)="toggleInstall(client)"
-                      >
-                        Install command
-                      </button>
+                      @if (m.role === "admin" || m.access?.installCommands !== false) {
+                        <button
+                          type="button"
+                          bitLink
+                          class="tw-mr-4"
+                          [attr.aria-expanded]="installFor()?.client.id === client.id"
+                          (click)="toggleInstall(client)"
+                        >
+                          Install command
+                        </button>
+                      }
                       @if (client.you?.status === CONFIRMED) {
-                        <a bitLink [routerLink]="['/organizations', client.id, 'members']">Open</a>
+                        <a bitLink [routerLink]="openLink(client)">Open</a>
                       } @else {
                         <span class="tw-text-muted">Waiting for access</span>
                       }
@@ -228,6 +234,7 @@ const EVENTS_PER_PAGE = 50;
               <tr>
                 <th bitCell>Name</th>
                 <th bitCell>Role</th>
+                <th bitCell>Access</th>
                 <th bitCell></th>
               </tr>
             </ng-container>
@@ -254,8 +261,26 @@ const EVENTS_PER_PAGE = 50;
                       {{ person.role === "admin" ? "Admin" : "Technician" }}
                     }
                   </td>
-                  <td bitCell class="tw-text-right">
+                  <td bitCell data-testid="msp-staff-access">
+                    @if (person.role === "admin") {
+                      <span class="tw-text-muted">Owner of every client</span>
+                    } @else if (person.access; as access) {
+                      {{ accessText(access) }}
+                    }
+                  </td>
+                  <td bitCell class="tw-whitespace-nowrap tw-text-right">
                     @if (m.role === "admin") {
+                      @if (person.role === "technician") {
+                        <button
+                          type="button"
+                          bitLink
+                          class="tw-mr-2"
+                          [attr.aria-expanded]="accessFor()?.userId === person.userId"
+                          (click)="toggleAccess(person)"
+                        >
+                          Edit access
+                        </button>
+                      }
                       <button
                         type="button"
                         bitIconButton="bwi-trash"
@@ -276,6 +301,13 @@ const EVENTS_PER_PAGE = 50;
                     </div>
                   </td>
                   <td bitCell>{{ invite.role === "admin" ? "Admin" : "Technician" }}</td>
+                  <td bitCell>
+                    @if (invite.role === "admin") {
+                      <span class="tw-text-muted">Owner of every client</span>
+                    } @else {
+                      {{ accessText(invite.access ?? defaultAccess) }}
+                    }
+                  </td>
                   <td bitCell class="tw-text-right">
                     @if (m.role === "admin") {
                       <button
@@ -290,6 +322,39 @@ const EVENTS_PER_PAGE = 50;
               }
             </ng-template>
           </bit-table>
+          @if (accessFor(); as person) {
+            <form
+              [formGroup]="accessForm"
+              [bitSubmit]="saveAccess"
+              class="tw-mt-4 tw-rounded-lg tw-border tw-border-solid tw-border-secondary-300 tw-p-4"
+              aria-label="Access"
+              data-testid="msp-access-editor"
+            >
+              <h3 bitTypography="h5">{{ person.name || person.email }}'s access</h3>
+              <p bitTypography="body2">
+                Changes apply to every client at once. Clients they no longer reach remove them
+                right away.
+              </p>
+              <app-keykeeper-technician-access
+                [clients]="m.clients"
+                [access]="person.access ?? defaultAccess"
+                (accessChange)="accessDraft.set($event)"
+              />
+              <div class="tw-mt-4 tw-flex tw-gap-2">
+                <button bitButton bitFormButton buttonType="primary" type="submit">
+                  Save access
+                </button>
+                <button
+                  bitButton
+                  buttonType="secondary"
+                  type="button"
+                  (click)="accessFor.set(null)"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          }
           @if (lastInvite(); as invite) {
             <bit-callout type="success" [title]="null" data-testid="msp-invite-link">
               <p>
@@ -314,23 +379,48 @@ const EVENTS_PER_PAGE = 50;
             </bit-callout>
           }
           @if (m.role === "admin") {
-            <form
-              [formGroup]="staffForm"
-              [bitSubmit]="addStaff"
-              class="tw-mt-4 tw-flex tw-items-end tw-gap-2"
-            >
-              <bit-form-field disableMargin class="tw-grow">
-                <bit-label>Email of someone to add</bit-label>
-                <input bitInput type="email" formControlName="email" />
-              </bit-form-field>
-              <bit-form-field disableMargin class="tw-min-w-36">
-                <bit-label>Role</bit-label>
-                <select bitInput formControlName="role">
-                  <option value="technician">Technician</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </bit-form-field>
-              <button bitButton bitFormButton buttonType="primary" type="submit">Add staff</button>
+            <form [formGroup]="staffForm" [bitSubmit]="addStaff" class="tw-mt-4">
+              <div class="tw-flex tw-items-end tw-gap-2">
+                <bit-form-field disableMargin class="tw-grow">
+                  <bit-label>Email of someone to add</bit-label>
+                  <input bitInput type="email" formControlName="email" />
+                </bit-form-field>
+                <bit-form-field disableMargin class="tw-min-w-36">
+                  <bit-label>Role</bit-label>
+                  <select bitInput formControlName="role">
+                    <option value="technician">Technician</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </bit-form-field>
+                <button bitButton bitFormButton buttonType="primary" type="submit">
+                  Add staff
+                </button>
+              </div>
+              @if (staffForm.controls.role.value === "technician") {
+                <p bitTypography="body2" class="tw-mb-0 tw-mt-2">
+                  Access: {{ accessText(newStaffAccess() ?? defaultAccess) }}
+                  <button
+                    type="button"
+                    bitLink
+                    class="tw-ml-2"
+                    [attr.aria-expanded]="newStaffAccess() != null"
+                    (click)="toggleNewStaffAccess()"
+                  >
+                    {{ newStaffAccess() == null ? "Choose access" : "Use the default" }}
+                  </button>
+                </p>
+                @if (newStaffAccess() != null) {
+                  <div
+                    class="tw-mt-2 tw-rounded-lg tw-border tw-border-solid tw-border-secondary-300 tw-p-4"
+                    data-testid="msp-new-staff-access"
+                  >
+                    <app-keykeeper-technician-access
+                      [clients]="m.clients"
+                      (accessChange)="newStaffAccess.set($event)"
+                    />
+                  </div>
+                }
+              }
             </form>
           }
         </section>
@@ -403,6 +493,14 @@ export class KeykeeperMspComponent implements OnInit {
     enrollment: ClientEnrollment;
   } | null>(null);
   private readonly serverUrl = signal("");
+
+  protected readonly defaultAccess = DEFAULT_ACCESS;
+  /** The technician whose access is being edited. */
+  protected readonly accessFor = signal<MspStaffMember | null>(null);
+  protected readonly accessDraft = signal<TechnicianAccess>(DEFAULT_ACCESS);
+  protected readonly accessForm = this.formBuilder.group({});
+  /** Access chosen for someone being added; null for the default. */
+  protected readonly newStaffAccess = signal<TechnicianAccess | null>(null);
 
   protected readonly mspForm = this.formBuilder.group({
     name: ["", [Validators.required, Validators.maxLength(100)]],
@@ -490,12 +588,16 @@ export class KeykeeperMspComponent implements OnInit {
     }
     await this.attempt(async () => {
       const email = this.staffForm.value.email!.trim();
+      const access = this.newStaffAccess() ?? undefined;
       const result = await this.mspApi.addStaff(
         msp.id,
         email,
         this.staffForm.value.role as MspRole,
+        access,
       );
+      const everyClient = this.staffForm.value.role === "admin" || reachesEveryClient(access);
       this.staffForm.reset({ email: "", role: "technician" });
+      this.newStaffAccess.set(null);
       if (result.invited) {
         this.lastInvite.set({
           email: result.email,
@@ -509,9 +611,53 @@ export class KeykeeperMspComponent implements OnInit {
       this.lastInvite.set(null);
       await this.confirmWaiting(msp.id);
       await this.reload(msp.id);
-      this.toast(`Added ${email} to every client`);
+      const clients = access?.clients.length ?? 0;
+      this.toast(
+        everyClient
+          ? `Added ${email} to every client`
+          : `Added ${email} to ${clients === 1 ? "1 client" : `${clients} clients`}`,
+      );
     });
   };
+
+  protected toggleNewStaffAccess() {
+    this.newStaffAccess.set(this.newStaffAccess() == null ? DEFAULT_ACCESS : null);
+  }
+
+  protected toggleAccess(person: MspStaffMember) {
+    if (this.accessFor()?.userId === person.userId) {
+      this.accessFor.set(null);
+      return;
+    }
+    this.accessDraft.set(person.access ?? DEFAULT_ACCESS);
+    this.accessFor.set(person);
+  }
+
+  protected readonly saveAccess = async () => {
+    const msp = this.msp();
+    const person = this.accessFor();
+    if (msp == null || person == null) {
+      return;
+    }
+    await this.attempt(async () => {
+      await this.mspApi.setAccess(msp.id, person.userId, this.accessDraft());
+      this.accessFor.set(null);
+      // Clients they now reach are waiting for the org key; give it now.
+      await this.confirmWaiting(msp.id);
+      await this.reload(msp.id);
+      this.toast(`Saved ${person.email}'s access`);
+    });
+  };
+
+  protected accessText(access: TechnicianAccess): string {
+    return describeAccess(access, this.msp()?.clients ?? []);
+  }
+
+  /** Into a client's admin console: Members for owners and admins, otherwise wherever their role starts. */
+  protected openLink(client: MspClient): string[] {
+    const type = client.you?.type ?? 2;
+    return type <= 1 ? ["/organizations", client.id, "members"] : ["/organizations", client.id];
+  }
 
   protected async cancelInvite(invite: MspInvite) {
     const msp = this.msp();
@@ -548,6 +694,9 @@ export class KeykeeperMspComponent implements OnInit {
     }
     await this.attempt(async () => {
       await this.mspApi.changeRole(msp.id, person.userId, role);
+      this.accessFor.set(null);
+      // A new admin joins clients they didn't reach before; give them the keys.
+      await this.confirmWaiting(msp.id);
       this.toast(`${person.email} is now ${role === "admin" ? "an admin" : "a technician"}`);
     });
     await this.reload(msp.id);
@@ -660,10 +809,10 @@ export class KeykeeperMspComponent implements OnInit {
     }
   }
 
-  /** A client's health figures for the table: a dash where you can't see its items yet. */
+  /** A client's health figures for the table: a dash where you can't see its items. */
   protected healthOf(client: MspClient): Record<keyof ClientHealth, number | string> {
     const health = this.health();
-    if (client.you?.status !== CONFIRMED) {
+    if (client.you?.status !== CONFIRMED || client.you.vaultItems === false) {
       return { items: "-", expiring: "-", weak: "-", reused: "-" };
     }
     return health?.get(client.id) ?? { items: "...", expiring: "...", weak: "...", reused: "..." };
