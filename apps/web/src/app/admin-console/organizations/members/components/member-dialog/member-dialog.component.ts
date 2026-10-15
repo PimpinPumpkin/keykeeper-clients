@@ -184,6 +184,22 @@ export class MemberDialogComponent implements OnDestroy {
     return this.formGroup.value.type === OrganizationUserType.Custom;
   }
 
+  /**
+   * Keykeeper: whether a permission our server enforces for custom roles is
+   * checked. Those roles can't also manage all collections yet (the server
+   * refuses it), so the dialog doesn't offer both.
+   */
+  get keykeeperPermissionChecked(): boolean {
+    const p = this.permissionsGroup.value;
+    return !!(
+      p.manageUsers ||
+      p.manageResetPassword ||
+      p.managePolicies ||
+      p.accessEventLogs ||
+      p.accessImportExport
+    );
+  }
+
   private destroy$ = new Subject<void>();
 
   isEditDialogParams(
@@ -474,6 +490,10 @@ export class MemberDialogComponent implements OnDestroy {
     if (clearPermissions) {
       return new PermissionsApi();
     }
+    // Keykeeper: never ask for both (see keykeeperPermissionChecked).
+    const collections = this.keykeeperPermissionChecked
+      ? { createNewCollections: false, editAnyCollection: false, deleteAnyCollection: false }
+      : this.permissionsGroup.value.manageAllCollectionsGroup;
     const partialPermissions: Partial<PermissionsApi> = {
       accessEventLogs: this.permissionsGroup.value.accessEventLogs,
       accessImportExport: this.permissionsGroup.value.accessImportExport,
@@ -483,11 +503,9 @@ export class MemberDialogComponent implements OnDestroy {
       managePolicies: this.permissionsGroup.value.managePolicies,
       manageUsers: this.permissionsGroup.value.manageUsers,
       manageResetPassword: this.permissionsGroup.value.manageResetPassword,
-      createNewCollections:
-        this.permissionsGroup.value.manageAllCollectionsGroup.createNewCollections,
-      editAnyCollection: this.permissionsGroup.value.manageAllCollectionsGroup.editAnyCollection,
-      deleteAnyCollection:
-        this.permissionsGroup.value.manageAllCollectionsGroup.deleteAnyCollection,
+      createNewCollections: collections.createNewCollections,
+      editAnyCollection: collections.editAnyCollection,
+      deleteAnyCollection: collections.deleteAnyCollection,
     };
 
     return Object.assign(p, partialPermissions);
