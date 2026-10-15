@@ -20,12 +20,16 @@ import { KeyService } from "@bitwarden/key-management";
 
 export type MspRole = "admin" | "technician";
 
+/** The defaults a new client starts with. "business" is the Business preset. */
+export type ClientPreset = "business" | "none";
+
 export type MspSummary = { id: string; name: string; role: MspRole };
 
 export type MspClient = {
   id: string;
   name: string;
   createdAt: string;
+  preset: "business" | null;
   members: { confirmed: number; accepted: number; invited: number; revoked: number };
   /** The caller's own membership there, if any. Status 2 is confirmed. */
   you: { memberId: string; status: number; type: number } | null;
@@ -62,21 +66,31 @@ export class KeykeeperMspApiService {
     return this.apiService.send("POST", "/keykeeper/msp", { name }, true, true);
   }
 
-  /** Creates a client organization, with its keys made here, like upstream's new organization. */
-  async createClient(mspId: string, name: string): Promise<void> {
+  /**
+   * Creates a client organization, with its keys made here, like upstream's
+   * new organization. The Business preset also gets "Everyone" and "Admins"
+   * collections; the server turns on its policies.
+   */
+  async createClient(mspId: string, name: string, preset: ClientPreset): Promise<void> {
     const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
     const [encryptedKey, key] = await this.keyService.makeOrgKey<OrgKey>(userId);
     const [publicKey, encryptedPrivateKey] = await this.keyService.makeKeyPair(key);
+    const business = preset === "business";
     const collectionName = await this.encryptService.encryptString(
-      this.i18nService.t("defaultCollection"),
+      business ? "Everyone" : this.i18nService.t("defaultCollection"),
       key,
     );
+    const adminsCollectionName = business
+      ? (await this.encryptService.encryptString("Admins", key)).encryptedString
+      : undefined;
     await this.apiService.send(
       "POST",
       `/keykeeper/msp/${mspId}/clients`,
       {
         name,
+        preset,
         collectionName: collectionName.encryptedString,
+        adminsCollectionName,
         key: encryptedKey.encryptedString,
         keys: { publicKey, encryptedPrivateKey: encryptedPrivateKey.encryptedString },
       },

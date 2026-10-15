@@ -7,7 +7,13 @@ import { ToastService } from "@bitwarden/components";
 import { HeaderModule } from "../../layouts/header/header.module";
 import { SharedModule } from "../../shared";
 
-import { KeykeeperMspApiService, MspDetails, MspRole, MspStaffMember } from "./msp-api.service";
+import {
+  ClientPreset,
+  KeykeeperMspApiService,
+  MspDetails,
+  MspRole,
+  MspStaffMember,
+} from "./msp-api.service";
 
 const CONFIRMED = 2;
 
@@ -51,7 +57,14 @@ const CONFIRMED = 2;
               <ng-template body>
                 @for (client of m.clients; track client.id) {
                   <tr bitRow [attr.data-testid]="'msp-client-' + client.name">
-                    <td bitCell>{{ client.name }}</td>
+                    <td bitCell>
+                      {{ client.name }}
+                      @if (client.preset === "business") {
+                        <span bitBadge variant="secondary" class="tw-ml-2" title="Business defaults"
+                          >Business</span
+                        >
+                      }
+                    </td>
                     <td bitCell data-testid="msp-client-members">{{ client.members.confirmed }}</td>
                     <td bitCell data-testid="msp-client-waiting">{{ client.members.accepted }}</td>
                     <td bitCell>{{ client.members.invited }}</td>
@@ -76,6 +89,13 @@ const CONFIRMED = 2;
               <bit-form-field disableMargin class="tw-grow">
                 <bit-label>New client's name</bit-label>
                 <input bitInput formControlName="name" />
+              </bit-form-field>
+              <bit-form-field disableMargin class="tw-min-w-48">
+                <bit-label>Defaults</bit-label>
+                <select bitInput formControlName="preset">
+                  <option value="business">Business (recommended)</option>
+                  <option value="none">None</option>
+                </select>
               </bit-form-field>
               <button bitButton bitFormButton buttonType="primary" type="submit">Add client</button>
             </form>
@@ -177,6 +197,7 @@ export class KeykeeperMspComponent implements OnInit {
   });
   protected readonly clientForm = this.formBuilder.group({
     name: ["", [Validators.required, Validators.maxLength(100)]],
+    preset: ["business" as ClientPreset, Validators.required],
   });
   protected readonly staffForm = this.formBuilder.group({
     email: ["", [Validators.required, Validators.email]],
@@ -222,10 +243,10 @@ export class KeykeeperMspComponent implements OnInit {
     }
     await this.attempt(async () => {
       const name = this.clientForm.value.name!.trim();
-      await this.mspApi.createClient(msp.id, name);
+      await this.mspApi.createClient(msp.id, name, this.clientForm.value.preset as ClientPreset);
       // Everyone else on staff joined the new client; give them its key now.
       await this.confirmWaiting(msp.id);
-      this.clientForm.reset();
+      this.clientForm.reset({ name: "", preset: "business" });
       await this.reload(msp.id);
       this.toast(`Added ${name}`);
     });
