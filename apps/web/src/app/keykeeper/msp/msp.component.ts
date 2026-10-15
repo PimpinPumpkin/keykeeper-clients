@@ -2,15 +2,20 @@ import { ChangeDetectionStrategy, Component, OnInit, signal } from "@angular/cor
 import { FormBuilder, Validators } from "@angular/forms";
 import { firstValueFrom } from "rxjs";
 
+import { AccountService } from "@bitwarden/common/auth/abstractions/account.service";
+import { getUserId } from "@bitwarden/common/auth/services/account.service";
 import { ErrorResponse } from "@bitwarden/common/models/response/error.response";
 import { EnvironmentService } from "@bitwarden/common/platform/abstractions/environment.service";
 import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.service";
 import { PlatformUtilsService } from "@bitwarden/common/platform/abstractions/platform-utils.service";
+import { PasswordStrengthServiceAbstraction } from "@bitwarden/common/tools/password-strength";
+import { CipherService } from "@bitwarden/common/vault/abstractions/cipher.service";
 import { DialogService, ToastService } from "@bitwarden/components";
 
 import { HeaderModule } from "../../layouts/header/header.module";
 import { SharedModule } from "../../shared";
 
+import { ClientHealth, clientHealth } from "./client-health";
 import {
   ClientEnrollment,
   ClientPreset,
@@ -57,6 +62,9 @@ const CONFIRMED = 2;
                   <th bitCell>Members</th>
                   <th bitCell>Waiting</th>
                   <th bitCell>Invited</th>
+                  <th bitCell title="Expired, or expiring within 30 days">Expiring</th>
+                  <th bitCell title="Passwords with a strength of 2 or less out of 4">Weak</th>
+                  <th bitCell title="Passwords used by more than one login">Reused</th>
                   <th bitCell></th>
                 </tr>
               </ng-container>
@@ -74,6 +82,10 @@ const CONFIRMED = 2;
                     <td bitCell data-testid="msp-client-members">{{ client.members.confirmed }}</td>
                     <td bitCell data-testid="msp-client-waiting">{{ client.members.accepted }}</td>
                     <td bitCell>{{ client.members.invited }}</td>
+                    @let clientHealth = healthOf(client);
+                    <td bitCell data-testid="msp-client-expiring">{{ clientHealth.expiring }}</td>
+                    <td bitCell data-testid="msp-client-weak">{{ clientHealth.weak }}</td>
+                    <td bitCell data-testid="msp-client-reused">{{ clientHealth.reused }}</td>
                     <td bitCell class="tw-text-right">
                       <button
                         type="button"
@@ -269,6 +281,8 @@ export class KeykeeperMspComponent implements OnInit {
   protected readonly CONFIRMED = CONFIRMED;
   protected readonly loading = signal(true);
   protected readonly msp = signal<MspDetails | null>(null);
+  /** Password health per client, computed here from items MSP staff can decrypt. */
+  protected readonly health = signal<Map<string, ClientHealth> | null>(null);
   protected readonly installFor = signal<{
     client: MspClient;
     enrollment: ClientEnrollment;
@@ -295,6 +309,9 @@ export class KeykeeperMspComponent implements OnInit {
     private readonly environmentService: EnvironmentService,
     private readonly platformUtilsService: PlatformUtilsService,
     private readonly dialogService: DialogService,
+    private readonly accountService: AccountService,
+    private readonly cipherService: CipherService,
+    private readonly passwordStrengthService: PasswordStrengthServiceAbstraction,
   ) {}
 
   async ngOnInit() {
@@ -434,7 +451,35 @@ export class KeykeeperMspComponent implements OnInit {
   }
 
   private async reload(mspId: string) {
-    this.msp.set(await this.mspApi.get(mspId));
+    const msp = await this.mspApi.get(mspId);
+    this.msp.set(msp);
+    void this.computeHealth(msp);
+  }
+
+  private async computeHealth(msp: MspDetails) {
+    try {
+      const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
+      const ciphers = await this.cipherService.getAllDecrypted(userId);
+      this.health.set(
+        clientHealth(
+          ciphers,
+          msp.clients.map((c) => c.id),
+          (password, hints) =>
+            this.passwordStrengthService.getPasswordStrength(password, null, hints)?.score ?? null,
+        ),
+      );
+    } catch (e) {
+      this.showError(e);
+    }
+  }
+
+  /** A client's health figures for the table: a dash where you can't see its items yet. */
+  protected healthOf(client: MspClient): Record<keyof ClientHealth, number | string> {
+    const health = this.health();
+    if (client.you?.status !== CONFIRMED) {
+      return { items: "-", expiring: "-", weak: "-", reused: "-" };
+    }
+    return health?.get(client.id) ?? { items: "...", expiring: "...", weak: "...", reused: "..." };
   }
 
   private async confirmWaiting(mspId: string) {
