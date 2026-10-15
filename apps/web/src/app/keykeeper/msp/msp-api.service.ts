@@ -39,6 +39,8 @@ export type MspStaffMember = { userId: string; email: string; name: string | nul
 
 export type MspDetails = MspSummary & { staff: MspStaffMember[]; clients: MspClient[] };
 
+export type ClientEnrollment = { token: string | null; createdAt: string | null; joins: number };
+
 type Pending = { organizationId: string; memberId: string; email: string; publicKey: string };
 
 @Injectable({ providedIn: "root" })
@@ -99,6 +101,28 @@ export class KeykeeperMspApiService {
     );
     await this.apiService.refreshIdentityToken();
     await this.syncService.fullSync(true);
+  }
+
+  /** A client's enrollment token, for its RMM install command. */
+  async getEnrollment(mspId: string, orgId: string): Promise<ClientEnrollment> {
+    return this.apiService.send(
+      "GET",
+      `/keykeeper/msp/${mspId}/clients/${orgId}/enrollment`,
+      null,
+      true,
+      true,
+    );
+  }
+
+  /** Replaces a client's enrollment token; install commands with the old one stop working for new joins. */
+  async replaceEnrollment(mspId: string, orgId: string): Promise<ClientEnrollment> {
+    return this.apiService.send(
+      "POST",
+      `/keykeeper/msp/${mspId}/clients/${orgId}/enrollment`,
+      null,
+      true,
+      true,
+    );
   }
 
   async addStaff(mspId: string, email: string, role: MspRole): Promise<void> {

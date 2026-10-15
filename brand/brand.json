@@ -15,5 +15,6 @@
     "events": "https://events.keykeeper.example",
     "scim": "https://scim.keykeeper.example",
     "send": "https://send.keykeeper.example"
-  }
+  },
+  "installScript": "Install-Keykeeper.ps1"
 }

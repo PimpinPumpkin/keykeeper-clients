@@ -1,15 +1,21 @@
 import { ChangeDetectionStrategy, Component, OnInit, signal } from "@angular/core";
 import { FormBuilder, Validators } from "@angular/forms";
+import { firstValueFrom } from "rxjs";
 
 import { ErrorResponse } from "@bitwarden/common/models/response/error.response";
-import { ToastService } from "@bitwarden/components";
+import { EnvironmentService } from "@bitwarden/common/platform/abstractions/environment.service";
+import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.service";
+import { PlatformUtilsService } from "@bitwarden/common/platform/abstractions/platform-utils.service";
+import { DialogService, ToastService } from "@bitwarden/components";
 
 import { HeaderModule } from "../../layouts/header/header.module";
 import { SharedModule } from "../../shared";
 
 import {
+  ClientEnrollment,
   ClientPreset,
   KeykeeperMspApiService,
+  MspClient,
   MspDetails,
   MspRole,
   MspStaffMember,
@@ -69,6 +75,15 @@ const CONFIRMED = 2;
                     <td bitCell data-testid="msp-client-waiting">{{ client.members.accepted }}</td>
                     <td bitCell>{{ client.members.invited }}</td>
                     <td bitCell class="tw-text-right">
+                      <button
+                        type="button"
+                        bitLink
+                        class="tw-mr-4"
+                        [attr.aria-expanded]="installFor()?.client.id === client.id"
+                        (click)="toggleInstall(client)"
+                      >
+                        Install command
+                      </button>
                       @if (client.you?.status === CONFIRMED) {
                         <a bitLink [routerLink]="['/organizations', client.id, 'members']">Open</a>
                       } @else {
@@ -79,6 +94,69 @@ const CONFIRMED = 2;
                 }
               </ng-template>
             </bit-table>
+          }
+          @if (installFor(); as install) {
+            <section
+              class="tw-mt-4 tw-rounded-lg tw-border tw-border-solid tw-border-secondary-300 tw-p-4"
+              aria-label="Install command"
+              data-testid="msp-install"
+            >
+              <h3 bitTypography="h5">Install command for {{ install.client.name }}</h3>
+              @if (install.enrollment.token; as token) {
+                <p bitTypography="body2">
+                  Run this from your RMM on {{ install.client.name }}'s computers, as an
+                  administrator. It installs the extension in Edge and Chrome, turns off the
+                  browsers' password managers, and anyone who then signs in joins
+                  {{ install.client.name }}.
+                </p>
+                <pre
+                  class="tw-whitespace-pre-wrap tw-break-all tw-rounded tw-bg-background-alt tw-p-3 tw-text-sm"
+                  data-testid="msp-install-command"
+                  >{{ installCommand(token) }}</pre>
+                <p bitTypography="helper">
+                  {{
+                    install.enrollment.joins === 1
+                      ? "1 person has"
+                      : install.enrollment.joins + " people have"
+                  }}
+                  joined with this command. Anyone who has it can ask to join, so treat it like a
+                  password.
+                </p>
+                <div class="tw-flex tw-gap-2">
+                  <button
+                    bitButton
+                    buttonType="secondary"
+                    type="button"
+                    (click)="copyCommand(token)"
+                  >
+                    Copy command
+                  </button>
+                  @if (m.role === "admin") {
+                    <button
+                      bitButton
+                      buttonType="danger"
+                      type="button"
+                      (click)="replaceToken(install.client)"
+                    >
+                      Replace token
+                    </button>
+                  }
+                </div>
+              } @else if (m.role === "admin") {
+                <button
+                  bitButton
+                  buttonType="primary"
+                  type="button"
+                  (click)="replaceToken(install.client)"
+                >
+                  Create install command
+                </button>
+              } @else {
+                <p bitTypography="body2">
+                  Ask an MSP admin to create this client's install command.
+                </p>
+              }
+            </section>
           }
           @if (m.role === "admin") {
             <form
@@ -191,6 +269,11 @@ export class KeykeeperMspComponent implements OnInit {
   protected readonly CONFIRMED = CONFIRMED;
   protected readonly loading = signal(true);
   protected readonly msp = signal<MspDetails | null>(null);
+  protected readonly installFor = signal<{
+    client: MspClient;
+    enrollment: ClientEnrollment;
+  } | null>(null);
+  private readonly serverUrl = signal("");
 
   protected readonly mspForm = this.formBuilder.group({
     name: ["", [Validators.required, Validators.maxLength(100)]],
@@ -208,6 +291,10 @@ export class KeykeeperMspComponent implements OnInit {
     private readonly mspApi: KeykeeperMspApiService,
     private readonly formBuilder: FormBuilder,
     private readonly toastService: ToastService,
+    private readonly i18nService: I18nService,
+    private readonly environmentService: EnvironmentService,
+    private readonly platformUtilsService: PlatformUtilsService,
+    private readonly dialogService: DialogService,
   ) {}
 
   async ngOnInit() {
@@ -289,6 +376,60 @@ export class KeykeeperMspComponent implements OnInit {
       await this.mspApi.removeStaff(msp.id, person.userId);
       await this.reload(msp.id);
       this.toast(`Removed ${person.email} from every client`);
+    });
+  }
+
+  protected async toggleInstall(client: MspClient) {
+    const msp = this.msp();
+    if (msp == null) {
+      return;
+    }
+    if (this.installFor()?.client.id === client.id) {
+      this.installFor.set(null);
+      return;
+    }
+    await this.attempt(async () => {
+      const environment = await firstValueFrom(this.environmentService.environment$);
+      this.serverUrl.set(environment.getWebVaultUrl());
+      this.installFor.set({
+        client,
+        enrollment: await this.mspApi.getEnrollment(msp.id, client.id),
+      });
+    });
+  }
+
+  /** The command an MSP runs from their RMM; the script's name comes from the brand. */
+  protected installCommand(token: string): string {
+    const script = this.i18nService.t("keykeeperInstallScript");
+    return `.\\${script} -ServerUrl ${this.serverUrl()} -EnrollmentToken ${token}`;
+  }
+
+  protected copyCommand(token: string) {
+    this.platformUtilsService.copyToClipboard(this.installCommand(token));
+    this.toast("Copied the install command");
+  }
+
+  protected async replaceToken(client: MspClient) {
+    const msp = this.msp();
+    if (msp == null) {
+      return;
+    }
+    const hadToken = this.installFor()?.enrollment.token != null;
+    if (hadToken) {
+      const confirmed = await this.dialogService.openSimpleDialog({
+        title: "Replace the install token?",
+        content: `Install commands already run on ${client.name}'s computers stop letting new people join. Run the new command there instead.`,
+        acceptButtonText: "Replace token",
+        type: "warning",
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+    await this.attempt(async () => {
+      const enrollment = await this.mspApi.replaceEnrollment(msp.id, client.id);
+      this.installFor.set({ client, enrollment });
+      this.toast(hadToken ? "Replaced the install token" : "Created the install command");
     });
   }
 

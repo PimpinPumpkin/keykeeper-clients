@@ -374,6 +374,7 @@ import { BackgroundBrowserBiometricsService } from "../key-management/biometrics
 import { BrowserSessionTimeoutTypeService } from "../key-management/session-timeout/services/browser-session-timeout-type.service";
 import { SHARED_UNLOCK_EXTERNAL } from "../key-management/shared-unlock-messages";
 import VaultTimeoutService from "../key-management/vault-timeout/vault-timeout.service";
+import { KeykeeperEnrollment } from "../keykeeper/enrollment";
 import { KeykeeperExpirationReminders } from "../keykeeper/expiration-reminders";
 import { BrowserActionsService } from "../platform/actions/browser-actions.service";
 import { DefaultBadgeBrowserApi } from "../platform/badge/badge-browser-api";
@@ -588,6 +589,7 @@ export default class MainBackground {
   private overlayNotificationsBackground: OverlayNotificationsBackgroundInterface;
   // Keykeeper
   keykeeperExpirationReminders: KeykeeperExpirationReminders;
+  keykeeperEnrollment: KeykeeperEnrollment;
   private runtimeBackground: RuntimeBackground;
   private tabsBackground: TabsBackground;
   private webRequestBackground: WebRequestBackground;
@@ -1837,6 +1839,16 @@ export default class MainBackground {
       this.cipherService,
     );
     this.keykeeperExpirationReminders.init();
+    // Keykeeper: join the client organization named by the MSP's install command.
+    this.keykeeperEnrollment = new KeykeeperEnrollment(
+      this.accountService,
+      this.authService,
+      this.apiService,
+      this.keyService,
+      this.encryptService,
+      this.syncService,
+    );
+    this.keykeeperEnrollment.init();
     this.commandsBackground.init();
     this.contextMenusBackground?.init();
     // Disable the side panel globally on startup so Bitwarden does not appear in

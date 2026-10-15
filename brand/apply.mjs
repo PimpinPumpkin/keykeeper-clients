@@ -140,6 +140,14 @@ function apply() {
   const ownMessages = JSON.parse(
     fs.readFileSync(path.join(ROOT, "brand/messages.en.json"), "utf8"),
   );
+  // The Windows install script's file name, for the MSP console's install
+  // command. It carries the product name, so it comes from brand.json.
+  if (typeof BRAND.installScript !== "string" || !/^[\w-]+\.ps1$/.test(BRAND.installScript)) {
+    fail(
+      'brand.json needs "installScript", the install script\'s file name, such as "Install-Example.ps1".',
+    );
+  }
+  ownMessages.keykeeperInstallScript = { message: BRAND.installScript };
   for (const rel of trackedFiles(
     "apps/browser/src/_locales/en/messages.json",
     "apps/web/src/locales/en/messages.json",
