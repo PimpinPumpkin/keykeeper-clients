@@ -18,6 +18,8 @@ import { SyncService } from "@bitwarden/common/platform/sync";
 import { OrgKey } from "@bitwarden/common/types/key";
 import { KeyService } from "@bitwarden/key-management";
 
+import { MspEvent } from "./msp-activity";
+
 export type MspRole = "admin" | "technician";
 
 /** The defaults a new client starts with. "business" is the Business preset. */
@@ -37,7 +39,33 @@ export type MspClient = {
 
 export type MspStaffMember = { userId: string; email: string; name: string | null; role: MspRole };
 
-export type MspDetails = MspSummary & { staff: MspStaffMember[]; clients: MspClient[] };
+export type MspInvite = { id: string; email: string; role: MspRole; createdAt: string };
+
+export type MspDetails = MspSummary & {
+  staff: MspStaffMember[];
+  invites: MspInvite[];
+  clients: MspClient[];
+};
+
+/** Adding staff: added at once, or invited when they don't have an account yet. */
+export type AddStaffResult =
+  | { invited: false; email: string; role: MspRole }
+  | {
+      invited: true;
+      inviteId: string;
+      email: string;
+      role: MspRole;
+      inviteUrl: string;
+      emailed: boolean;
+    };
+
+export type InvitationInfo = {
+  mspName: string;
+  role: MspRole;
+  email: string;
+  invitedBy: string;
+  forYou: boolean;
+};
 
 export type ClientEnrollment = { token: string | null; createdAt: string | null; joins: number };
 
@@ -108,6 +136,17 @@ export class KeykeeperMspApiService {
     await this.syncService.fullSync(true);
   }
 
+  /** The MSP's audit log, newest first, older than `before` if given. */
+  async listEvents(mspId: string, before?: string, limit = 50): Promise<MspEvent[]> {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (before) {
+      query.set("before", before);
+    }
+    return (
+      await this.apiService.send("GET", `/keykeeper/msp/${mspId}/events?${query}`, null, true, true)
+    ).data;
+  }
+
   /** A client's enrollment token, for its RMM install command. */
   async getEnrollment(mspId: string, orgId: string): Promise<ClientEnrollment> {
     return this.apiService.send(
@@ -146,14 +185,32 @@ export class KeykeeperMspApiService {
     );
   }
 
-  async addStaff(mspId: string, email: string, role: MspRole): Promise<void> {
-    await this.apiService.send(
+  async addStaff(mspId: string, email: string, role: MspRole): Promise<AddStaffResult> {
+    return this.apiService.send(
       "POST",
       `/keykeeper/msp/${mspId}/staff`,
       { email, role },
       true,
       true,
     );
+  }
+
+  async cancelInvite(mspId: string, inviteId: string): Promise<void> {
+    await this.apiService.send(
+      "DELETE",
+      `/keykeeper/msp/${mspId}/invites/${inviteId}`,
+      null,
+      true,
+      false,
+    );
+  }
+
+  async invitationInfo(token: string): Promise<InvitationInfo> {
+    return this.apiService.send("POST", "/keykeeper/msp/invites/info", { token }, true, true);
+  }
+
+  async acceptInvitation(token: string): Promise<{ mspId: string; role: MspRole }> {
+    return this.apiService.send("POST", "/keykeeper/msp/invites/accept", { token }, true, true);
   }
 
   async changeRole(mspId: string, userId: string, role: MspRole): Promise<void> {

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, signal } from "@angular/core";
 import { FormBuilder, Validators } from "@angular/forms";
+import { ActivatedRoute, Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 
 import { AccountService } from "@bitwarden/common/auth/abstractions/account.service";
@@ -17,17 +18,21 @@ import { HeaderModule } from "../../layouts/header/header.module";
 import { SharedModule } from "../../shared";
 
 import { ClientHealth, clientHealth } from "./client-health";
+import { describeEvent, MspEvent } from "./msp-activity";
 import {
   ClientEnrollment,
   ClientPreset,
+  InvitationInfo,
   KeykeeperMspApiService,
   MspClient,
+  MspInvite,
   MspDetails,
   MspRole,
   MspStaffMember,
 } from "./msp-api.service";
 
 const CONFIRMED = 2;
+const EVENTS_PER_PAGE = 50;
 
 /**
  * Keykeeper: the MSP console. Every client at a glance, with a way into each
@@ -41,6 +46,29 @@ const CONFIRMED = 2;
   template: `
     <app-header></app-header>
     <bit-container>
+      @if (invitation(); as inv) {
+        <bit-callout type="info" title="You're invited" data-testid="msp-invitation">
+          @if (inv.info.forYou) {
+            <p>
+              {{ inv.info.invitedBy }} invited you to join {{ inv.info.mspName }} as
+              {{ inv.info.role === "admin" ? "an admin" : "a technician" }}. You'll get access to
+              the clients {{ inv.info.mspName }} manages.
+            </p>
+            <button
+              bitButton
+              buttonType="primary"
+              type="button"
+              (click)="acceptInvitation(inv.token)"
+            >
+              Join {{ inv.info.mspName }}
+            </button>
+          } @else {
+            <p class="tw-mb-0">
+              This invitation is for {{ inv.info.email }}. Sign in with that account to accept it.
+            </p>
+          }
+        </bit-callout>
+      }
       @if (loading()) {
         <bit-icon name="bwi-spinner" class="bwi-spin tw-text-muted" title="Loading"></bit-icon>
       } @else if (msp(); as m) {
@@ -239,8 +267,52 @@ const CONFIRMED = 2;
                   </td>
                 </tr>
               }
+              @for (invite of m.invites; track invite.id) {
+                <tr bitRow [attr.data-testid]="'msp-invite-' + invite.email">
+                  <td bitCell>
+                    <div>
+                      {{ invite.email }}
+                      <span bitBadge variant="warning" class="tw-ml-2">Invited</span>
+                    </div>
+                  </td>
+                  <td bitCell>{{ invite.role === "admin" ? "Admin" : "Technician" }}</td>
+                  <td bitCell class="tw-text-right">
+                    @if (m.role === "admin") {
+                      <button
+                        type="button"
+                        bitIconButton="bwi-close"
+                        [label]="'Cancel the invitation for ' + invite.email"
+                        (click)="cancelInvite(invite)"
+                      ></button>
+                    }
+                  </td>
+                </tr>
+              }
             </ng-template>
           </bit-table>
+          @if (lastInvite(); as invite) {
+            <bit-callout type="success" [title]="null" data-testid="msp-invite-link">
+              <p>
+                {{ invite.email }} doesn't have an account yet, so they're invited.
+                @if (invite.emailed) {
+                  We emailed them this link.
+                } @else {
+                  Send them this link. They create an account with that email address, then open it.
+                }
+              </p>
+              <pre class="tw-whitespace-pre-wrap tw-break-all tw-text-sm">{{
+                invite.inviteUrl
+              }}</pre>
+              <button
+                bitButton
+                buttonType="secondary"
+                type="button"
+                (click)="copyText(invite.inviteUrl)"
+              >
+                Copy link
+              </button>
+            </bit-callout>
+          }
           @if (m.role === "admin") {
             <form
               [formGroup]="staffForm"
@@ -260,6 +332,38 @@ const CONFIRMED = 2;
               </bit-form-field>
               <button bitButton bitFormButton buttonType="primary" type="submit">Add staff</button>
             </form>
+          }
+        </section>
+
+        <section class="tw-mt-8" aria-label="Activity">
+          <h2 bitTypography="h3">Activity</h2>
+          @if (events().length === 0) {
+            <p bitTypography="body1">Nothing yet.</p>
+          } @else {
+            <ul class="tw-m-0 tw-list-none tw-p-0" data-testid="msp-activity">
+              @for (e of events(); track e.id) {
+                <li class="tw-border-0 tw-border-b tw-border-solid tw-border-secondary-300 tw-py-2">
+                  <div bitTypography="body2">{{ describe(e) }}</div>
+                  <div class="tw-text-xs tw-text-muted">
+                    {{ e.date | date: "medium" }}
+                    @if (e.ip) {
+                      · {{ e.ip }}
+                    }
+                  </div>
+                </li>
+              }
+            </ul>
+            @if (moreEvents()) {
+              <button
+                bitButton
+                buttonType="secondary"
+                type="button"
+                class="tw-mt-2"
+                (click)="showOlder()"
+              >
+                Show older
+              </button>
+            }
           }
         </section>
       } @else {
@@ -282,6 +386,16 @@ export class KeykeeperMspComponent implements OnInit {
   protected readonly CONFIRMED = CONFIRMED;
   protected readonly loading = signal(true);
   protected readonly msp = signal<MspDetails | null>(null);
+  protected readonly invitation = signal<{ token: string; info: InvitationInfo } | null>(null);
+  protected readonly lastInvite = signal<{
+    email: string;
+    inviteUrl: string;
+    emailed: boolean;
+  } | null>(null);
+  protected readonly events = signal<MspEvent[]>([]);
+  protected readonly moreEvents = signal(false);
+  protected readonly describe = describeEvent;
+
   /** Password health per client, computed here from items MSP staff can decrypt. */
   protected readonly health = signal<Map<string, ClientHealth> | null>(null);
   protected readonly installFor = signal<{
@@ -314,9 +428,19 @@ export class KeykeeperMspComponent implements OnInit {
     private readonly cipherService: CipherService,
     private readonly passwordStrengthService: PasswordStrengthServiceAbstraction,
     private readonly syncService: SyncService,
+    private readonly route: ActivatedRoute,
+    private readonly router: Router,
   ) {}
 
   async ngOnInit() {
+    try {
+      const token = this.route.snapshot.queryParamMap.get("invite");
+      if (token) {
+        this.invitation.set({ token, info: await this.mspApi.invitationInfo(token) });
+      }
+    } catch (e) {
+      this.showError(e);
+    }
     try {
       const [first] = await this.mspApi.list();
       if (first) {
@@ -366,13 +490,56 @@ export class KeykeeperMspComponent implements OnInit {
     }
     await this.attempt(async () => {
       const email = this.staffForm.value.email!.trim();
-      await this.mspApi.addStaff(msp.id, email, this.staffForm.value.role as MspRole);
-      await this.confirmWaiting(msp.id);
+      const result = await this.mspApi.addStaff(
+        msp.id,
+        email,
+        this.staffForm.value.role as MspRole,
+      );
       this.staffForm.reset({ email: "", role: "technician" });
+      if (result.invited) {
+        this.lastInvite.set({
+          email: result.email,
+          inviteUrl: result.inviteUrl,
+          emailed: result.emailed,
+        });
+        await this.reload(msp.id);
+        this.toast(`Invited ${result.email}`);
+        return;
+      }
+      this.lastInvite.set(null);
+      await this.confirmWaiting(msp.id);
       await this.reload(msp.id);
       this.toast(`Added ${email} to every client`);
     });
   };
+
+  protected async cancelInvite(invite: MspInvite) {
+    const msp = this.msp();
+    if (msp == null) {
+      return;
+    }
+    await this.attempt(async () => {
+      await this.mspApi.cancelInvite(msp.id, invite.id);
+      this.lastInvite.set(null);
+      await this.reload(msp.id);
+      this.toast(`Cancelled the invitation for ${invite.email}`);
+    });
+  }
+
+  protected async acceptInvitation(token: string) {
+    await this.attempt(async () => {
+      const { mspId } = await this.mspApi.acceptInvitation(token);
+      this.invitation.set(null);
+      await this.router.navigate([], { queryParams: { invite: null }, replaceUrl: true });
+      await this.reload(mspId);
+      this.toast(`You joined ${this.msp()?.name}`);
+    });
+  }
+
+  protected copyText(text: string) {
+    this.platformUtilsService.copyToClipboard(text);
+    this.toast("Copied");
+  }
 
   protected async changeRole(person: MspStaffMember, role: MspRole) {
     const msp = this.msp();
@@ -456,6 +623,22 @@ export class KeykeeperMspComponent implements OnInit {
     const msp = await this.mspApi.get(mspId);
     this.msp.set(msp);
     void this.computeHealth(msp);
+    const events = await this.mspApi.listEvents(mspId);
+    this.events.set(events);
+    this.moreEvents.set(events.length === EVENTS_PER_PAGE);
+  }
+
+  protected async showOlder() {
+    const msp = this.msp();
+    const oldest = this.events().at(-1);
+    if (msp == null || oldest == null) {
+      return;
+    }
+    await this.attempt(async () => {
+      const older = await this.mspApi.listEvents(msp.id, oldest.date, EVENTS_PER_PAGE);
+      this.events.set([...this.events(), ...older]);
+      this.moreEvents.set(older.length === EVENTS_PER_PAGE);
+    });
   }
 
   private async computeHealth(msp: MspDetails) {
