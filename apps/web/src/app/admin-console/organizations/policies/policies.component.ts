@@ -32,6 +32,7 @@ import {
 } from "@bitwarden/components";
 import { safeProvider } from "@bitwarden/ui-common";
 
+import { KeykeeperClientMspPoliciesComponent } from "../../../keykeeper/msp/client-msp-policies.component";
 import { HeaderModule } from "../../../layouts/header/header.module";
 import { SharedModule } from "../../../shared";
 
@@ -42,7 +43,14 @@ import { POLICY_EDIT_REGISTER } from "./policy-register-token";
 
 @Component({
   templateUrl: "policies.component.html",
-  imports: [SharedModule, HeaderModule, SectionHeaderComponent, ItemModule],
+  // Keykeeper: plus the note about an MSP's default policies.
+  imports: [
+    SharedModule,
+    HeaderModule,
+    SectionHeaderComponent,
+    ItemModule,
+    KeykeeperClientMspPoliciesComponent,
+  ],
   providers: [
     safeProvider({
       provide: PolicyListService,
