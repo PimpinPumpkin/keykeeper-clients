@@ -1,4 +1,4 @@
-// Keykeeper: sends an MSP's item templates to its clients. Each copy is an
+// Keykeeper: writes an MSP's item templates into its clients. Each copy is an
 // ordinary item in the client's Templates collection, encrypted here with that
 // client's key by upstream's own code, with the same template id as the source
 // and the MSP's name in its definition. The server only records which item
@@ -113,8 +113,8 @@ export class KeykeeperTemplateSender {
     }
     if (copies.length > 0) {
       await this.mspApi.recordTemplateCopies(msp.id, definition.id, copies);
+      await this.syncService.fullSync(true);
     }
-    await this.syncService.fullSync(true);
     return result;
   }
 

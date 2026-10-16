@@ -31,7 +31,8 @@ export function describeEvent(
   const colon = detail.indexOf(":");
   const templateId = colon < 0 ? detail : detail.slice(0, colon);
   const clients = colon < 0 ? "" : detail.slice(colon + 1);
-  const template = templateName(templateId) ?? "a template";
+  const name = templateName(templateId);
+  const theTemplate = name ? `the template ${name}` : "a template";
   switch (e.event) {
     case "msp_created":
       return `${actor} set up ${e.detail ?? "the MSP"}`;
@@ -41,13 +42,14 @@ export function describeEvent(
     case "default_policy_changed":
       return `${actor} set the default ${e.detail ?? "policy"}`;
     case "template_added":
-      return `${actor} started sending ${template} to ${clients || "clients"}`;
+      return `${actor} added ${theTemplate} for ${clients || "clients"}`;
     case "template_changed":
-      return `${actor} now sends ${template} to ${clients || "clients"}`;
+      return `${actor} changed which clients get ${name ?? "a template"}: ${clients || "clients"}`;
     case "template_sent":
-      return `${actor} sent ${template} to ${e.organizationName || clients || "clients"}`;
+      // Copies written when a template is added, a client is added, or the template changes.
+      return `${name ?? "A template"} was applied to ${e.organizationName || clients || "clients"} (by ${actor})`;
     case "template_stopped":
-      return `${actor} stopped sending ${template}`;
+      return `${actor} removed ${theTemplate}`;
     case "client_policy_default":
       return `${actor} put ${org} back on the default ${e.detail ?? "policy"}`;
     case "staff_added":

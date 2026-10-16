@@ -76,8 +76,7 @@ export function templateStatus(row: TemplateRow): string {
   if (row.behind.length === 0) {
     return "Up to date";
   }
-  const behind = row.behind.length;
-  return `${behind} of ${row.targets.length} ${row.targets.length === 1 ? "client needs" : "clients need"} it`;
+  return `Needs updating in ${row.behind.length} of ${row.targets.length} ${row.targets.length === 1 ? "client" : "clients"}`;
 }
 
 /** Who a template goes to, in a few words. */
