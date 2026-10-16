@@ -1,27 +1,18 @@
 // The PassBundle desktop agent: a tray app with no windows. See README.md and
 // DESIGN.md, "Desktop agent".
 //
-//   passbundle-agent             runs in the tray (one per signed-in user)
+//   passbundle-agent             runs in the tray (one per signed-in user) and
+//                                serves the extension
+//   passbundle-agent --serve     serves the extension without a tray (tests)
 //   passbundle-agent --update    installs a newer signed release, if there is one
 //   passbundle-agent --version
 
 // A tray app: no console window on Windows.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod brand {
-    include!(concat!(env!("OUT_DIR"), "/brand.rs"));
-}
-#[allow(dead_code)] // Used by the native-messaging host, next.
-mod channel;
-mod config;
-mod instance;
-#[allow(dead_code)] // Used by the native-messaging host, next.
-mod protocol;
-mod tray;
-mod update;
-mod version;
-
 use std::process::ExitCode;
+
+use passbundle_agent::{biometrics, brand, config, instance, ipc, server::Server, update, version};
 
 use config::Config;
 use version::Version;
@@ -35,18 +26,37 @@ fn main() -> ExitCode {
         .as_slice()
     {
         [] => run_tray(),
+        ["--serve"] => run_serve(),
         ["--version"] => {
             println!("{} agent {}", brand::NAME, Version::current());
             ExitCode::SUCCESS
         }
         ["--update"] => run_update(),
         _ => {
-            eprintln!("usage: {} [--update | --version]", env!("CARGO_PKG_NAME"));
+            eprintln!(
+                "usage: {} [--serve | --update | --version]",
+                env!("CARGO_PKG_NAME")
+            );
             ExitCode::from(2)
         }
     }
 }
 
+/// Starts serving the extension on the agent's socket, on its own thread.
+fn start_serving() -> Result<std::thread::JoinHandle<()>, ExitCode> {
+    let listener = ipc::Listener::bind(&ipc::address()).map_err(|e| {
+        eprintln!("can't listen for the extension: {e}");
+        ExitCode::FAILURE
+    })?;
+    let server = Server::new(biometrics::platform());
+    Ok(std::thread::spawn(move || {
+        if let Err(e) = server.serve(listener) {
+            eprintln!("stopped serving the extension: {e}");
+        }
+    }))
+}
+
+#[cfg(any(windows, target_os = "macos"))]
 fn run_tray() -> ExitCode {
     let Some(_lock) = instance::acquire() else {
         // Already running for this user.
@@ -55,7 +65,30 @@ fn run_tray() -> ExitCode {
     if let Ok(exe) = std::env::current_exe() {
         update::clean_up(&exe);
     }
-    tray::run(Config::load())
+    if let Err(code) = start_serving() {
+        return code;
+    }
+    passbundle_agent::tray::run(Config::load())
+}
+
+/// No tray on other platforms: only `--serve`, for tests.
+#[cfg(not(any(windows, target_os = "macos")))]
+fn run_tray() -> ExitCode {
+    run_serve()
+}
+
+fn run_serve() -> ExitCode {
+    let Some(_lock) = instance::acquire() else {
+        eprintln!("{} agent is already running for this user.", brand::NAME);
+        return ExitCode::FAILURE;
+    };
+    match start_serving() {
+        Ok(thread) => {
+            let _ = thread.join();
+            ExitCode::FAILURE
+        }
+        Err(code) => code,
+    }
 }
 
 /// Run by the installer's scheduled task (Windows) or launch daemon (macOS),

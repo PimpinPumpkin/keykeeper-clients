@@ -50,7 +50,8 @@ impl SessionKey {
         Self(bytes)
     }
 
-    #[cfg(test)]
+    /// For tests that play the extension's side (and so know the key).
+    #[cfg(any(test, feature = "test-authenticator"))]
     pub fn from_test_bytes(bytes: &[u8]) -> Self {
         Self(bytes.try_into().expect("64 bytes"))
     }

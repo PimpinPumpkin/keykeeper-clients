@@ -53,14 +53,14 @@ fn valid_server_url(url: &str) -> bool {
 /// The macOS preference domain: the brand's domain reversed, plus "agent".
 #[cfg(target_os = "macos")]
 pub fn preference_domain() -> String {
-    preference_domain_for(brand::DOMAIN)
+    reverse_domain(brand::DOMAIN) + ".agent"
 }
 
-#[cfg(any(target_os = "macos", test))]
-fn preference_domain_for(domain: &str) -> String {
+/// `passbundle.com` as `com.passbundle`, for names that follow that convention.
+pub fn reverse_domain(domain: &str) -> String {
     let mut labels: Vec<&str> = domain.split('.').collect();
     labels.reverse();
-    format!("{}.agent", labels.join("."))
+    labels.join(".")
 }
 
 #[cfg(windows)]
@@ -140,11 +140,8 @@ mod tests {
     }
 
     #[test]
-    fn the_macos_preference_domain_is_the_brand_domain_reversed() {
-        assert_eq!(preference_domain_for("example.com"), "com.example.agent");
-        assert_eq!(
-            preference_domain_for("vault.example.co.uk"),
-            "uk.co.example.vault.agent"
-        );
+    fn domains_reverse_label_by_label() {
+        assert_eq!(reverse_domain("example.com"), "com.example");
+        assert_eq!(reverse_domain("vault.example.co.uk"), "uk.co.example.vault");
     }
 }

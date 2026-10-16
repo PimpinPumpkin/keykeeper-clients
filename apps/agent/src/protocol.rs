@@ -89,26 +89,25 @@ impl PromptGate {
 }
 
 /// What the agent knows about who it's talking to, for prompt text.
-#[derive(Clone, Copy)]
-pub struct Context<'a> {
-    /// The browser that started the host, such as "Chrome".
-    pub browser: &'a str,
+pub struct Context {
+    /// The browser that started the host, such as "Firefox", or "your browser".
+    pub browser: String,
     /// "Windows Hello" or "Touch ID".
-    pub method: &'a str,
+    pub method: &'static str,
 }
 
 /// One connection from the extension (one native-messaging host process).
 pub struct Connection<'a> {
     biometrics: &'a dyn Biometrics,
     gate: &'a PromptGate,
-    context: Context<'a>,
+    context: Context,
     /// Session keys by the extension's `appId`.
     sessions: HashMap<String, SessionKey>,
     now_ms: Box<dyn Fn() -> i64 + Send + 'a>,
 }
 
 impl<'a> Connection<'a> {
-    pub fn new(biometrics: &'a dyn Biometrics, gate: &'a PromptGate, context: Context<'a>) -> Self {
+    pub fn new(biometrics: &'a dyn Biometrics, gate: &'a PromptGate, context: Context) -> Self {
         Self {
             biometrics,
             gate,
@@ -217,7 +216,7 @@ impl<'a> Connection<'a> {
     ) -> Option<serde_json::Map<String, Value>> {
         let mut reply = serde_json::Map::new();
         let now = Instant::now();
-        let Context { browser, method } = self.context;
+        let (browser, method) = (self.context.browser.as_str(), self.context.method);
         match command {
             "getBiometricsStatus" => {
                 reply.insert("response".into(), json!(self.biometrics.status() as i32));
@@ -468,9 +467,9 @@ mod tests {
         }
     }
 
-    fn context() -> Context<'static> {
+    fn context() -> Context {
         Context {
-            browser: "Chrome",
+            browser: "Chrome".into(),
             method: "Windows Hello",
         }
     }

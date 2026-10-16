@@ -12,9 +12,21 @@ publish = false
 # with them. See README.md.
 [workspace]
 
+[lib]
+name = "passbundle_agent"
+path = "src/lib.rs"
+
+# The tray app, one per signed-in user.
 [[bin]]
 name = "passbundle-agent"
 path = "src/main.rs"
+
+# What browsers start for native messaging: a pipe to the agent. A console
+# program, since Windows doesn't give a GUI program's stdin and stdout to the
+# browser reliably.
+[[bin]]
+name = "passbundle-agent-host"
+path = "src/host.rs"
 
 [dependencies]
 aes = "0.8"
@@ -30,18 +42,34 @@ png = "0.18"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
-tao = "0.37"
-tray-icon = "0.26"
 # The OS's own TLS (SChannel, Security.framework) and certificate store: no C
 # crypto to build, and it trusts what the machine trusts, such as an office
 # firewall's root. Releases are checked by signature either way.
 ureq = { version = "3", default-features = false, features = ["native-tls-no-default"] }
 
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+tao = "0.37"
+tray-icon = "0.26"
+
 [target.'cfg(windows)'.dependencies]
 windows-registry = "0.6"
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Storage_FileSystem",
+  "Win32_System_IO",
+  "Win32_System_Pipes",
+  "Win32_System_Threading",
+] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 plist = "1"
+
+[features]
+# A stand-in for Windows Hello, for end-to-end tests. Debug builds only:
+# release builds refuse to compile with it.
+test-authenticator = []
 
 [build-dependencies]
 serde_json = "1"
