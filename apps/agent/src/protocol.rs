@@ -287,7 +287,13 @@ impl<'a> Connection<'a> {
                 reply.insert("response".into(), json!(enrolled));
             }
             "keykeeper.biometric.remove" => {
-                self.biometrics.remove(user_id);
+                // The extension stamps every message with the active
+                // account; logging out another one names it.
+                let target = message
+                    .get("forUserId")
+                    .and_then(Value::as_str)
+                    .unwrap_or(user_id);
+                self.biometrics.remove(target);
                 reply.insert("response".into(), json!(true));
             }
             // As upstream: unknown commands get no reply.
@@ -601,6 +607,19 @@ mod tests {
         }
         assert!(fake.reasons.lock().unwrap().is_empty());
         extension.call(&mut connection, enroll_message()).unwrap();
+        // Logging out another account removes that account's key only.
+        fake.keys
+            .lock()
+            .unwrap()
+            .insert("other-user".into(), vec![9; 64]);
+        let removed = extension
+            .call(
+                &mut connection,
+                json!({ "command": "keykeeper.biometric.remove", "forUserId": "other-user" }),
+            )
+            .unwrap();
+        assert_eq!(removed["response"], true);
+        assert!(fake.is_enrolled(USER) && !fake.is_enrolled("other-user"));
         let removed = extension
             .call(
                 &mut connection,

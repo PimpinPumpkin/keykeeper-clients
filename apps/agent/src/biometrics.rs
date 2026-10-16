@@ -28,7 +28,9 @@ pub struct Unsupported;
 
 impl Biometrics for Unsupported {
     fn status(&self) -> BiometricsStatus {
-        BiometricsStatus::PlatformUnsupported
+        // Not PlatformUnsupported: the extension still offers the setting
+        // for that one, and turning it on would only fail.
+        BiometricsStatus::HardwareUnavailable
     }
     fn is_enrolled(&self, _user_id: &str) -> bool {
         false
