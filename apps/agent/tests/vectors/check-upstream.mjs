@@ -5,9 +5,11 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import path from "node:path";
 
 const [vectorsPath, clientsRoot] = process.argv.slice(2);
-const require = createRequire(`${clientsRoot}/package.json`);
+// createRequire wants an absolute path.
+const require = createRequire(path.resolve(clientsRoot, "package.json"));
 const { PureCrypto } = require("@bitwarden/sdk-internal");
 
 const v = JSON.parse(fs.readFileSync(vectorsPath, "utf8"));

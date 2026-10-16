@@ -142,14 +142,14 @@ mod windows {
         os::windows::{ffi::OsStrExt, io::FromRawHandle},
         path::Path,
         ptr,
-        sync::atomic::{AtomicBool, Ordering},
+        sync::Mutex,
     };
 
     use windows_sys::Win32::{
         Foundation::{
             CloseHandle, DuplicateHandle, GetLastError, LocalFree, DUPLICATE_SAME_ACCESS,
-            ERROR_BROKEN_PIPE, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, GENERIC_READ, GENERIC_WRITE,
-            HANDLE, INVALID_HANDLE_VALUE,
+            ERROR_BROKEN_PIPE, ERROR_IO_PENDING, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED,
+            GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
         },
         Security::{
             Authorization::{
@@ -165,7 +165,7 @@ mod windows {
         },
         System::{
             Pipes::{
-                ConnectNamedPipe, CreateNamedPipeW, GetNamedPipeServerProcessId,
+                ConnectNamedPipe, CreateNamedPipeW, GetNamedPipeServerProcessId, WaitNamedPipeW,
                 PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE,
                 PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
             },
@@ -183,10 +183,14 @@ mod windows {
     pub struct Listener {
         name: Vec<u16>,
         security: SecurityDescriptor,
-        first: AtomicBool,
+        /// A pipe instance waiting for the next client. One always exists
+        /// while the agent runs: a pipe name only exists while an instance
+        /// does, so without it a client arriving between connections would
+        /// find nothing.
+        next: Mutex<HANDLE>,
     }
 
-    // The descriptor is only read after creation.
+    // The handles and the descriptor are only used under the lock or read.
     unsafe impl Send for Listener {}
     unsafe impl Sync for Listener {}
 
@@ -194,49 +198,63 @@ mod windows {
         s.encode_wide().chain(Some(0)).collect()
     }
 
+    fn create_instance(
+        name: &[u16],
+        security: &SecurityDescriptor,
+        first: bool,
+    ) -> io::Result<HANDLE> {
+        let attributes = SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: security.0,
+            bInheritHandle: 0,
+        };
+        // The first instance must be the first pipe of this name on the
+        // computer: if another program made it, refuse to serve on it.
+        let first = if first {
+            FILE_FLAG_FIRST_PIPE_INSTANCE
+        } else {
+            0
+        };
+        let handle = unsafe {
+            CreateNamedPipeW(
+                name.as_ptr(),
+                PIPE_ACCESS_DUPLEX | first,
+                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
+                PIPE_UNLIMITED_INSTANCES,
+                (MAX_FRAME + 4) as u32,
+                (MAX_FRAME + 4) as u32,
+                0,
+                &attributes,
+            )
+        };
+        if handle == INVALID_HANDLE_VALUE {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(handle)
+    }
+
     impl Listener {
         pub fn bind(address: &Path) -> io::Result<Self> {
-            let listener = Self {
-                name: wide(address.as_os_str()),
-                security: SecurityDescriptor::current_user_only()?,
-                first: AtomicBool::new(true),
-            };
-            Ok(listener)
+            let name = wide(address.as_os_str());
+            let security = SecurityDescriptor::current_user_only()?;
+            let first = create_instance(&name, &security, true)?;
+            Ok(Self {
+                name,
+                security,
+                next: Mutex::new(first),
+            })
         }
 
-        /// Creates a pipe instance and waits for a client on it.
+        /// Waits for a client on the waiting instance, makes the next one,
+        /// and returns the connected one.
         pub fn accept(&self) -> io::Result<ServerStream> {
-            let attributes = SECURITY_ATTRIBUTES {
-                nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
-                lpSecurityDescriptor: self.security.0,
-                bInheritHandle: 0,
-            };
-            // The first instance must be the first pipe of this name on the
-            // computer: if another program made it, refuse to serve on it.
-            let first = if self.first.swap(false, Ordering::SeqCst) {
-                FILE_FLAG_FIRST_PIPE_INSTANCE
-            } else {
-                0
-            };
-            let handle = unsafe {
-                CreateNamedPipeW(
-                    self.name.as_ptr(),
-                    PIPE_ACCESS_DUPLEX | first,
-                    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                    PIPE_UNLIMITED_INSTANCES,
-                    (MAX_FRAME + 4) as u32,
-                    (MAX_FRAME + 4) as u32,
-                    0,
-                    &attributes,
-                )
-            };
-            if handle == INVALID_HANDLE_VALUE {
-                return Err(io::Error::last_os_error());
-            }
+            let mut next = self.next.lock().unwrap();
+            let handle = *next;
             let connected = unsafe { ConnectNamedPipe(handle, ptr::null_mut()) } != 0
                 || unsafe { GetLastError() } == ERROR_PIPE_CONNECTED;
-            if !connected {
-                let error = io::Error::last_os_error();
+            let error = (!connected).then(io::Error::last_os_error);
+            *next = create_instance(&self.name, &self.security, false)?;
+            if let Some(error) = error {
                 unsafe { CloseHandle(handle) };
                 return Err(error);
             }
@@ -244,23 +262,38 @@ mod windows {
         }
     }
 
+    impl Drop for Listener {
+        fn drop(&mut self) {
+            unsafe { CloseHandle(*self.next.lock().unwrap()) };
+        }
+    }
+
     pub fn connect(address: &Path) -> io::Result<ClientStream> {
         let name = wide(address.as_os_str());
-        let handle = unsafe {
-            CreateFileW(
-                name.as_ptr(),
-                GENERIC_READ | GENERIC_WRITE,
-                0,
-                ptr::null(),
-                OPEN_EXISTING,
-                FILE_FLAG_OVERLAPPED,
-                ptr::null_mut(),
-            )
-        };
-        if handle == INVALID_HANDLE_VALUE {
-            return Err(io::Error::last_os_error());
+        // Every instance can be busy for a moment, while the agent makes the
+        // next one; wait for one then. No pipe at all means no agent.
+        for _ in 0..20 {
+            let handle = unsafe {
+                CreateFileW(
+                    name.as_ptr(),
+                    GENERIC_READ | GENERIC_WRITE,
+                    0,
+                    ptr::null(),
+                    OPEN_EXISTING,
+                    FILE_FLAG_OVERLAPPED,
+                    ptr::null_mut(),
+                )
+            };
+            if handle != INVALID_HANDLE_VALUE {
+                return Ok(ClientStream(handle));
+            }
+            let error = io::Error::last_os_error();
+            if error.raw_os_error() != Some(ERROR_PIPE_BUSY as i32) {
+                return Err(error);
+            }
+            unsafe { WaitNamedPipeW(name.as_ptr(), 250) };
         }
-        Ok(ClientStream(handle))
+        Err(io::Error::new(io::ErrorKind::TimedOut, "the agent is busy"))
     }
 
     /// The host's end. The host waits on the agent and the browser at once,
