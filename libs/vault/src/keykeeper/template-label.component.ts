@@ -20,6 +20,9 @@ import { templateDefinition, templateOf } from "./templates";
         >
         New {{ d.base === "login" ? "logins" : "notes" }} from this template start with its custom
         fields.
+        @if (d.from) {
+          It comes from {{ d.from }}, which keeps it up to date.
+        }
       </p>
     }
     @if (template(); as t) {
