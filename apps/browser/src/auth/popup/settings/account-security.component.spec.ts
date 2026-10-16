@@ -38,6 +38,7 @@ import { BiometricStateService, KeyService } from "@bitwarden/key-management";
 import { SessionTimeoutSettingsComponent } from "@bitwarden/key-management-ui";
 
 import { NativeMessagingPermissionDialogComponent } from "../../../key-management/shared-unlock/popup/native-messaging-permission-dialog.component";
+import { ENROLL_BIOMETRICS, REMOVE_BIOMETRICS } from "../../../keykeeper/agent-biometrics-messages";
 import { BrowserApi } from "../../../platform/browser/browser-api";
 import BrowserPopupUtils from "../../../platform/browser/browser-popup-utils";
 import { PopOutComponent } from "../../../platform/popup/components/pop-out.component";
@@ -351,6 +352,7 @@ describe("AccountSecurityComponent", () => {
     let openDialogSpy: jest.SpyInstance;
     let popoutSpy: jest.SpyInstance;
     let closePopoutSpy: jest.SpyInstance;
+    let sendMessageSpy: jest.SpyInstance;
 
     beforeEach(() => {
       policyService.policiesByType$.mockReturnValue(of([null]));
@@ -362,6 +364,39 @@ describe("AccountSecurityComponent", () => {
       closePopoutSpy = jest
         .spyOn(BrowserPopupUtils, "closeCurrentPopupOrPopout")
         .mockResolvedValue(undefined);
+      // Keykeeper: the background answers for the desktop agent.
+      sendMessageSpy = jest
+        .spyOn(BrowserApi, "sendMessageWithResponse")
+        .mockResolvedValue({ result: true });
+    });
+
+    // Keykeeper: biometric unlock through the desktop agent.
+    describe("through the desktop agent", () => {
+      it("asks the agent to keep the key, and turns the setting back off if it isn't confirmed", async () => {
+        permissionsGrantedSpy.mockResolvedValue(true);
+        sendMessageSpy.mockResolvedValue({ result: false });
+        const toastService = TestBed.inject(ToastService);
+
+        await component.ngOnInit();
+        await component.updateBiometric(true);
+
+        expect(sendMessageSpy).toHaveBeenCalledWith(ENROLL_BIOMETRICS, { userId: mockUserId });
+        expect(biometricStateService.setBiometricUnlockEnabled).toHaveBeenLastCalledWith(
+          false,
+          mockUserId,
+        );
+        expect(component.form.controls.biometric.value).toBe(false);
+        expect(toastService.showToast).toHaveBeenCalledWith(
+          expect.objectContaining({ variant: "error" }),
+        );
+      });
+
+      it("has the agent forget the key when turned off", async () => {
+        await component.ngOnInit();
+        await component.updateBiometric(false);
+
+        expect(sendMessageSpy).toHaveBeenCalledWith(REMOVE_BIOMETRICS, { userId: mockUserId });
+      });
     });
 
     describe("updating to false", () => {

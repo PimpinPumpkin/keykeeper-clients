@@ -63,6 +63,7 @@ import {
   NativeMessagingPermissionDialogComponent,
   NativeMessagingPermissionDialogType,
 } from "../../../key-management/shared-unlock/popup/native-messaging-permission-dialog.component";
+import { ENROLL_BIOMETRICS, REMOVE_BIOMETRICS } from "../../../keykeeper/agent-biometrics-messages";
 import { BrowserApi } from "../../../platform/browser/browser-api";
 import BrowserPopupUtils from "../../../platform/browser/browser-popup-utils";
 import { PopOutComponent } from "../../../platform/popup/components/pop-out.component";
@@ -420,6 +421,25 @@ export class AccountSecurityComponent implements OnInit, OnDestroy {
 
       await this.biometricStateService.setBiometricUnlockEnabled(true, userId);
 
+      // Keykeeper: the desktop agent asks for Windows Hello and keeps the
+      // user key; without that, biometric unlock stays off.
+      if (hadPermission) {
+        const enrolled = await BrowserApi.sendMessageWithResponse<{ result: boolean }>(
+          ENROLL_BIOMETRICS,
+          { userId },
+        );
+        if (enrolled?.result !== true) {
+          await this.biometricStateService.setBiometricUnlockEnabled(false, userId);
+          this.form.controls.biometric.setValue(false, { emitEvent: false });
+          this.toastService.showToast({
+            variant: "error",
+            title: null,
+            message: this.i18nService.t("keykeeperBiometricsNotEnrolled"),
+          });
+          return;
+        }
+      }
+
       if (!hadPermission) {
         // The nativeMessaging permission was just granted. The extension must reload to register
         // the native messaging host. State is saved above so it survives the reload. The
@@ -431,6 +451,8 @@ export class AccountSecurityComponent implements OnInit, OnDestroy {
     } else {
       await this.biometricStateService.setBiometricUnlockEnabled(false, userId);
       await this.biometricStateService.setFingerprintValidated(false);
+      // Keykeeper: and the desktop agent forgets the key.
+      await BrowserApi.sendMessageWithResponse(REMOVE_BIOMETRICS, { userId });
     }
   }
 

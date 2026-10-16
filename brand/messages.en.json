@@ -22,5 +22,8 @@
   },
   "keykeeperCustomRoleNoCollections": {
     "message": "With these permissions, a custom role can't also manage all collections yet. Give them collections on the Collections tab."
+  },
+  "keykeeperBiometricsNotEnrolled": {
+    "message": "Unlock with biometrics is still off. It wasn't confirmed, or the desktop app isn't running."
   }
 }

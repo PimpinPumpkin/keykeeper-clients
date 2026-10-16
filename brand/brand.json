@@ -16,5 +16,6 @@
     "scim": "https://vault.passbundle.com/scim/v2",
     "send": "https://vault.passbundle.com/#/send/"
   },
-  "installScript": "Install-PassBundle.ps1"
+  "installScript": "Install-PassBundle.ps1",
+  "nativeMessagingHost": "com.passbundle.agent"
 }

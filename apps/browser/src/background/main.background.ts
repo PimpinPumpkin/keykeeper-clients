@@ -378,6 +378,7 @@ import { BackgroundBrowserBiometricsService } from "../key-management/biometrics
 import { BrowserSessionTimeoutTypeService } from "../key-management/session-timeout/services/browser-session-timeout-type.service";
 import { SHARED_UNLOCK_EXTERNAL } from "../key-management/shared-unlock-messages";
 import VaultTimeoutService from "../key-management/vault-timeout/vault-timeout.service";
+import { KeykeeperAgentBiometrics } from "../keykeeper/agent-biometrics";
 import { KeykeeperEnrollment } from "../keykeeper/enrollment";
 import { KeykeeperExpirationReminders } from "../keykeeper/expiration-reminders";
 import { startMspWork } from "../keykeeper/msp-work";
@@ -596,6 +597,7 @@ export default class MainBackground {
   keykeeperExpirationReminders: KeykeeperExpirationReminders;
   keykeeperEnrollment: KeykeeperEnrollment;
   keykeeperMspWork: KeykeeperMspWork;
+  keykeeperAgentBiometrics: KeykeeperAgentBiometrics;
   private runtimeBackground: RuntimeBackground;
   private tabsBackground: TabsBackground;
   private webRequestBackground: WebRequestBackground;
@@ -1855,6 +1857,12 @@ export default class MainBackground {
       this.syncService,
     );
     this.keykeeperEnrollment.init();
+    // Keykeeper: biometric unlock through the desktop agent.
+    this.keykeeperAgentBiometrics = new KeykeeperAgentBiometrics(
+      () => this.nativeMessagingBackground,
+      this.keyService,
+      this.accountService,
+    );
     // Keykeeper: an MSP's background work, as in the web vault.
     const mspRequests = new KeykeeperMspRequests(this.apiService);
     this.keykeeperMspWork = new KeykeeperMspWork(
@@ -2047,6 +2055,11 @@ export default class MainBackground {
     );
 
     const userBeingLoggedOut = userId ?? activeUserId;
+
+    // Keykeeper: the desktop agent forgets this account's key.
+    if (await this.biometricStateService.getBiometricUnlockEnabled(userBeingLoggedOut)) {
+      await this.keykeeperAgentBiometrics.remove(userBeingLoggedOut);
+    }
 
     await this.eventUploadService.uploadEvents(userBeingLoggedOut);
 

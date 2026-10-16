@@ -33,6 +33,7 @@ import { AutofillMessageCommand } from "../autofill/enums/autofill-message.enums
 import { AutofillLifecycleService } from "../autofill/services/abstractions/autofill-lifecycle.service";
 import { AutofillService } from "../autofill/services/abstractions/autofill.service";
 import { FORCE_TARGETING_RULES_UPDATE_COMMAND } from "../autofill/services/targeting-rules-data.service";
+import { ENROLL_BIOMETRICS, REMOVE_BIOMETRICS } from "../keykeeper/agent-biometrics-messages";
 import { BrowserApi } from "../platform/browser/browser-api";
 import BrowserPopupUtils from "../platform/browser/browser-popup-utils";
 import { BrowserEnvironmentService } from "../platform/services/browser-environment.service";
@@ -103,6 +104,9 @@ export default class RuntimeBackground {
         BiometricsCommands.UnlockWithBiometricsForUser,
         BiometricsCommands.GetBiometricsStatusForUser,
         BiometricsCommands.CanEnableBiometricUnlock,
+        // Keykeeper: biometric unlock through the desktop agent.
+        ENROLL_BIOMETRICS,
+        REMOVE_BIOMETRICS,
         "getUserPremiumStatus",
         "getUrlAutofillTargetingRules",
       ];
@@ -211,6 +215,13 @@ export default class RuntimeBackground {
       }
       case BiometricsCommands.CanEnableBiometricUnlock: {
         return await this.main.biometricsService.canEnableBiometricUnlock();
+      }
+      // Keykeeper: biometric unlock through the desktop agent.
+      case ENROLL_BIOMETRICS: {
+        return await this.main.keykeeperAgentBiometrics.enroll(msg.userId);
+      }
+      case REMOVE_BIOMETRICS: {
+        return await this.main.keykeeperAgentBiometrics.remove(msg.userId);
       }
       case "getUserPremiumStatus": {
         const activeUserId = await firstValueFrom(
