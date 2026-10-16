@@ -1,5 +1,5 @@
-import { CipherType, FieldType } from "@bitwarden/common/vault/enums";
-import { FieldView } from "@bitwarden/common/vault/models/view/field.view";
+import { CipherType, FieldType } from "../enums";
+import { FieldView } from "../models/view/field.view";
 
 import {
   BUILT_IN_TEMPLATES,

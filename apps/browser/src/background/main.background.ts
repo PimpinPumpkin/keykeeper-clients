@@ -22,10 +22,14 @@ import {
 import {
   CollectionEncryptionService,
   CollectionService,
+  DefaultCollectionAdminService,
   DefaultCollectionEncryptionService,
   DefaultCollectionService,
   DefaultOrganizationUserApiService,
   DefaultOrganizationUserService,
+  KeykeeperMspRequests,
+  KeykeeperMspWork,
+  KeykeeperTemplateSender,
   OrganizationUserApiService,
   OrganizationUserService,
 } from "@bitwarden/admin-console/common";
@@ -376,6 +380,7 @@ import { SHARED_UNLOCK_EXTERNAL } from "../key-management/shared-unlock-messages
 import VaultTimeoutService from "../key-management/vault-timeout/vault-timeout.service";
 import { KeykeeperEnrollment } from "../keykeeper/enrollment";
 import { KeykeeperExpirationReminders } from "../keykeeper/expiration-reminders";
+import { startMspWork } from "../keykeeper/msp-work";
 import { BrowserActionsService } from "../platform/actions/browser-actions.service";
 import { DefaultBadgeBrowserApi } from "../platform/badge/badge-browser-api";
 import { BadgeService } from "../platform/badge/badge.service";
@@ -590,6 +595,7 @@ export default class MainBackground {
   // Keykeeper
   keykeeperExpirationReminders: KeykeeperExpirationReminders;
   keykeeperEnrollment: KeykeeperEnrollment;
+  keykeeperMspWork: KeykeeperMspWork;
   private runtimeBackground: RuntimeBackground;
   private tabsBackground: TabsBackground;
   private webRequestBackground: WebRequestBackground;
@@ -1849,6 +1855,31 @@ export default class MainBackground {
       this.syncService,
     );
     this.keykeeperEnrollment.init();
+    // Keykeeper: an MSP's background work, as in the web vault.
+    const mspRequests = new KeykeeperMspRequests(this.apiService);
+    this.keykeeperMspWork = new KeykeeperMspWork(
+      mspRequests,
+      new KeykeeperTemplateSender(
+        mspRequests,
+        this.cipherService,
+        new DefaultCollectionAdminService(
+          this.apiService,
+          this.keyService,
+          this.encryptService,
+          this.collectionService,
+          this.organizationService,
+        ),
+        this.accountService,
+        this.syncService,
+      ),
+      this.accountService,
+      this.authService,
+      this.cipherService,
+      this.organizationService,
+      this.organizationUserService,
+      this.syncService,
+    );
+    startMspWork(this.keykeeperMspWork);
     this.commandsBackground.init();
     this.contextMenusBackground?.init();
     // Disable the side panel globally on startup so Bitwarden does not appear in
