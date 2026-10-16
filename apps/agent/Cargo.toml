@@ -17,6 +17,14 @@ name = "passbundle-agent"
 path = "src/main.rs"
 
 [dependencies]
+aes = "0.8"
+base64 = "0.22"
+cbc = { version = "0.1", features = ["alloc"] }
+hmac = "0.12"
+rand = "0.8"
+rsa = { version = "0.9", default-features = false, features = ["std"] }
+sha1 = "0.10"
+zeroize = { version = "1", features = ["derive"] }
 minisign-verify = "0.3"
 png = "0.18"
 serde = { version = "1", features = ["derive"] }

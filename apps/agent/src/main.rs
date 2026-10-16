@@ -11,8 +11,12 @@
 mod brand {
     include!(concat!(env!("OUT_DIR"), "/brand.rs"));
 }
+#[allow(dead_code)] // Used by the native-messaging host, next.
+mod channel;
 mod config;
 mod instance;
+#[allow(dead_code)] // Used by the native-messaging host, next.
+mod protocol;
 mod tray;
 mod update;
 mod version;
