@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 OUT=assets/generated
-rm -rf "$OUT" && mkdir -p "$OUT/browser" "$OUT/web"
+rm -rf "$OUT" && mkdir -p "$OUT/browser" "$OUT/web" "$OUT/agent"
 
 COLOR=$(python3 -c "import json; print(json.load(open('brand.json'))['color'])")
 PATH_D=$(sed -E 's/.* d="([^"]+)".*/\1/' assets/mark.svg)
@@ -30,6 +30,11 @@ render "#000000" 18 "$OUT/browser/icon18_safari.png"
 render "#000000" 36 "$OUT/browser/icon18_safari@2x.png"
 render "#00000080" 18 "$OUT/browser/icon18_safari_locked.png"
 render "#00000080" 36 "$OUT/browser/icon18_safari_locked@2x.png"
+
+# The desktop agent's tray icon. The macOS menu bar wants a template image
+# (black on transparent, 18 points); Windows shows the mark in color.
+render "#000000" 36 "$OUT/agent/tray-macos.png"
+render "$COLOR" 32 "$OUT/agent/tray-windows.png"
 
 render "$COLOR" 180 "$OUT/web/apple-touch-icon.png"
 render "$COLOR" 16 "$OUT/web/favicon-16x16.png"
