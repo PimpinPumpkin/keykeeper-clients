@@ -1,34 +1,29 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/bitwarden/brand/main/screenshots/apps-combo-logo.png" alt="Bitwarden" />
-</p>
-<p align="center">
-  <a href="https://github.com/bitwarden/clients/actions/workflows/build-browser.yml?query=branch:main" target="_blank"><img src="https://github.com/bitwarden/clients/actions/workflows/build-browser.yml/badge.svg?branch=main" alt="GitHub Workflow browser build on main" /></a>
-  <a href="https://github.com/bitwarden/clients/actions/workflows/build-cli.yml?query=branch:main" target="_blank"><img src="https://github.com/bitwarden/clients/actions/workflows/build-cli.yml/badge.svg?branch=main" alt="GitHub Workflow CLI build on main" /></a>
-  <a href="https://github.com/bitwarden/clients/actions/workflows/build-desktop.yml?query=branch:main" target="_blank"><img src="https://github.com/bitwarden/clients/actions/workflows/build-desktop.yml/badge.svg?branch=main" alt="GitHub Workflow desktop build on main" /></a>
-  <a href="https://github.com/bitwarden/clients/actions/workflows/build-web.yml?query=branch:main" target="_blank"><img src="https://github.com/bitwarden/clients/actions/workflows/build-web.yml/badge.svg?branch=main" alt="GitHub Workflow web build on main" /></a>
-</p>
+# PassBundle apps
 
----
+The web vault, browser extension, desktop app, and command line for [PassBundle](https://github.com/PimpinPumpkin/Passbundle), a password manager for individuals, families, and managed service providers (MSPs).
 
-# Bitwarden Client Applications
+They're based on the open-source [Bitwarden clients](https://github.com/bitwarden/clients), which we follow by release and build in their open-source configuration only. PassBundle adds an MSP console (every client at a glance, staff and technician access, default policies, templates every client gets, onboarding through an RMM install command, and an audit log), custom roles for a client's point of contact, item templates, expiration dates, and autofill fixes. Vaults stay end-to-end encrypted: keys are made and used only in the apps.
 
-This repository houses all Bitwarden client applications except the mobile applications ([iOS](https://github.com/bitwarden/ios) | [android](https://github.com/bitwarden/android)).
+> PassBundle is in development and not ready for production use.
 
-Please refer to the [Clients section](https://contributing.bitwarden.com/getting-started/clients/) of the [Contributing Documentation](https://contributing.bitwarden.com/) for build instructions, recommended tooling, code style tips, and lots of other great information to get you started.
+## Building
 
-## Related projects:
+```sh
+npm ci
+node brand/apply.mjs                                   # apply the PassBundle branding
+(cd apps/web && npm run build:oss:selfhost:prod)       # web vault
+(cd apps/browser && npm run build:prod:chrome)         # browser extension
+node brand/apply.mjs --revert                          # back to the committed sources
+```
 
-- [bitwarden/server](https://github.com/bitwarden/server): The core infrastructure backend (API, database, Docker, etc).
-- [bitwarden/ios](https://github.com/bitwarden/ios): Bitwarden iOS Password Manager & Authenticator apps.
-- [bitwarden/android](https://github.com/bitwarden/android): Bitwarden Android Password Manager & Authenticator apps.
-- [bitwarden/directory-connector](https://github.com/bitwarden/directory-connector): A tool for syncing a directory (AD, LDAP, Azure, G Suite, Okta) to an organization.
+Branding is applied at build time from [brand/brand.json](brand/brand.json). The end-to-end tests live in the [PassBundle repository](https://github.com/PimpinPumpkin/Passbundle); CI here runs them against each commit, together with the [PassBundle server](https://github.com/PimpinPumpkin/passbundle-server).
 
-# We're Hiring!
+## Security
 
-Interested in contributing in a big way? Consider joining our team! We're hiring for many positions. Please take a look at our [Careers page](https://bitwarden.com/careers/) to see what opportunities are [currently open](https://bitwarden.com/careers/#open-positions) as well as what it's like to work at Bitwarden.
+See [SECURITY.md](SECURITY.md).
 
-# Contribute
+## License and credits
 
-Code contributions are welcome! Please commit any pull requests against the `main` branch. Learn more about how to contribute by reading the [Contributing Guidelines](https://contributing.bitwarden.com/contributing/). Check out the [Contributing Documentation](https://contributing.bitwarden.com/) for how to get started with your first contribution.
+GPL-3.0, see [LICENSE.txt](LICENSE.txt). Based on the Bitwarden clients by Bitwarden, Inc. and their contributors, whose copyright notices are kept.
 
-Security audits and feedback are welcome. Please open an issue or email us privately if the report is sensitive in nature. You can read our security policy in the [`SECURITY.md`](SECURITY.md) file.
+PassBundle isn't affiliated with or endorsed by Bitwarden, Inc. Bitwarden is a trademark of Bitwarden, Inc.
