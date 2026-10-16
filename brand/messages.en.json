@@ -19,5 +19,8 @@
   },
   "keykeeperMspConsole": {
     "message": "MSP console"
+  },
+  "keykeeperCustomRoleNoCollections": {
+    "message": "With these permissions, a custom role can't also manage all collections yet. Give them collections on the Collections tab."
   }
 }
