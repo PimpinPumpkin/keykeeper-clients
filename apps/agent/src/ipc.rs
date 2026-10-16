@@ -165,8 +165,9 @@ mod windows {
         },
         System::{
             Pipes::{
-                ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS,
-                PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
+                ConnectNamedPipe, CreateNamedPipeW, GetNamedPipeServerProcessId,
+                PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE,
+                PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
             },
             Threading::{CreateEventW, GetCurrentProcess, OpenProcessToken},
             IO::{GetOverlappedResult, OVERLAPPED},
@@ -271,6 +272,12 @@ mod windows {
     unsafe impl Send for ClientStream {}
 
     impl ClientStream {
+        /// The agent's process, which the host lets bring prompts to the front.
+        pub fn server_process_id(&self) -> Option<u32> {
+            let mut pid = 0u32;
+            (unsafe { GetNamedPipeServerProcessId(self.0, &mut pid) } != 0).then_some(pid)
+        }
+
         pub fn try_clone(&self) -> io::Result<Self> {
             let process = unsafe { GetCurrentProcess() };
             let mut copy: HANDLE = ptr::null_mut();

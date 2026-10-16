@@ -1,6 +1,6 @@
-//! The platform's biometrics behind [`Biometrics`]: Windows Hello on Windows.
-//! On macOS, Touch ID waits for the agent to be signed (DESIGN.md, "Biometric
-//! unlock"), so it reports the platform as unsupported for now.
+//! The platform's biometrics behind [`Biometrics`]: Windows Hello on Windows
+//! ([`crate::windows_hello`]). On macOS, Touch ID waits for the agent to be
+//! signed (DESIGN.md, "Biometric unlock"), so it reports none for now.
 
 use zeroize::Zeroizing;
 
@@ -20,6 +20,9 @@ pub fn platform() -> Box<dyn Biometrics> {
     if let Some(dir) = std::env::var_os("PASSBUNDLE_AGENT_TEST_AUTHENTICATOR") {
         return Box::new(test::Scripted::new(dir.into()));
     }
+    #[cfg(windows)]
+    return Box::new(crate::windows_hello::WindowsHello::new());
+    #[cfg(not(windows))]
     Box::new(Unsupported)
 }
 

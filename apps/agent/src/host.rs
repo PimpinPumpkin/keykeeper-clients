@@ -35,6 +35,11 @@ fn main() -> ExitCode {
         "your browser"
     };
 
+    // Windows Hello prompts open behind the browser unless the agent may
+    // bring them to the front. The browser started this host, so the host
+    // may pass that right on.
+    #[cfg(windows)]
+    let agent_pid = agent.server_process_id();
     let mut to_agent = agent.try_clone().expect("socket handle");
     let mut from_agent = agent;
     if write_frame(
@@ -58,6 +63,12 @@ fn main() -> ExitCode {
     thread::spawn(move || {
         let mut stdin = io::stdin().lock();
         while let Ok(Some(frame)) = read_frame(&mut stdin) {
+            #[cfg(windows)]
+            if let Some(pid) = agent_pid {
+                unsafe {
+                    windows_sys::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(pid)
+                };
+            }
             if write_frame(&mut to_agent, &frame).is_err() {
                 break;
             }
