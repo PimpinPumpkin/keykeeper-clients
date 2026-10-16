@@ -15,6 +15,7 @@ import { SyncService } from "@bitwarden/common/platform/sync";
 import { PasswordStrengthServiceAbstraction } from "@bitwarden/common/tools/password-strength";
 import { CipherService } from "@bitwarden/common/vault/abstractions/cipher.service";
 import { DialogService, ToastService } from "@bitwarden/components";
+import { templateDefinition } from "@bitwarden/vault";
 
 import {
   BasePolicyEditDefinition,
@@ -36,10 +37,13 @@ import {
   MspDetails,
   MspPolicies,
   MspRole,
+  MspTemplates,
   MspStaffMember,
   TechnicianAccess,
 } from "./msp-api.service";
 import { clientPolicySummary } from "./msp-policies";
+import { KeykeeperTemplateSender } from "./msp-template-sender.service";
+import { KeykeeperMspTemplatesComponent } from "./msp-templates.component";
 import { DEFAULT_ACCESS, describeAccess, reachesEveryClient } from "./technician-access";
 import { KeykeeperTechnicianAccessEditorComponent } from "./technician-access-editor.component";
 
@@ -70,6 +74,7 @@ const CLIENT_FEATURES = {
     SharedModule,
     HeaderModule,
     KeykeeperDefaultPoliciesComponent,
+    KeykeeperMspTemplatesComponent,
     KeykeeperTechnicianAccessEditorComponent,
   ],
   template: `
@@ -258,6 +263,10 @@ const CLIENT_FEATURES = {
             [organizationId]="keyedClientId()"
             (changed)="reload(m.id)"
           />
+        }
+
+        @if (templates(); as t) {
+          <app-keykeeper-msp-templates [msp]="m" [templates]="t" (changed)="reload(m.id)" />
         }
 
         <section aria-label="Staff">
@@ -466,7 +475,7 @@ const CLIENT_FEATURES = {
             <ul class="tw-m-0 tw-list-none tw-p-0" data-testid="msp-activity">
               @for (e of events(); track e.id) {
                 <li class="tw-border-0 tw-border-b tw-border-solid tw-border-secondary-300 tw-py-2">
-                  <div bitTypography="body2">{{ describe(e) }}</div>
+                  <div bitTypography="body2">{{ describe(e, templateNames()) }}</div>
                   <div class="tw-text-xs tw-text-muted">
                     {{ e.date | date: "medium" }}
                     @if (e.ip) {
@@ -517,8 +526,14 @@ export class KeykeeperMspComponent implements OnInit {
   } | null>(null);
   protected readonly events = signal<MspEvent[]>([]);
   protected readonly moreEvents = signal(false);
-  protected readonly describe = describeEvent;
+  /** Template names by template id, for Activity; the server never sees them. */
+  protected readonly templateNames = signal(new Map<string, string>());
+  protected describe(e: MspEvent, names: Map<string, string>) {
+    return describeEvent(e, (id) => names.get(id));
+  }
 
+  /** The templates sent to clients. Older servers have none. */
+  protected readonly templates = signal<MspTemplates | null>(null);
   /** The default policies, and which clients have their own settings. Older servers have none. */
   protected readonly policies = signal<MspPolicies | null>(null);
   /** Upstream's forms for the policies the server offers, in the admin console's order. */
@@ -571,6 +586,7 @@ export class KeykeeperMspComponent implements OnInit {
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly configService: ConfigService,
+    private readonly templateSender: KeykeeperTemplateSender,
   ) {}
 
   async ngOnInit() {
@@ -614,12 +630,17 @@ export class KeykeeperMspComponent implements OnInit {
     }
     await this.attempt(async () => {
       const name = this.clientForm.value.name!.trim();
-      await this.mspApi.createClient(msp.id, name, this.clientForm.value.preset as ClientPreset);
+      const orgId = await this.mspApi.createClient(
+        msp.id,
+        name,
+        this.clientForm.value.preset as ClientPreset,
+      );
       // Everyone else on staff joined the new client; give them its key now.
       await this.confirmWaiting(msp.id);
       this.clientForm.reset({ name: "", preset: "business" });
-      await this.reload(msp.id);
       this.toast(`Added ${name}`);
+      await this.sendTemplatesToNewClient(msp, { id: orgId, name });
+      await this.reload(msp.id);
     });
   };
 
@@ -816,9 +837,56 @@ export class KeykeeperMspComponent implements OnInit {
     this.msp.set(msp);
     void this.computeHealth(msp);
     await this.loadPolicies(mspId);
+    await this.loadTemplates(mspId);
     const events = await this.mspApi.listEvents(mspId);
     this.events.set(events);
     this.moreEvents.set(events.length === EVENTS_PER_PAGE);
+  }
+
+  /** A new client gets every template sent to every client. */
+  private async sendTemplatesToNewClient(msp: MspDetails, client: { id: string; name: string }) {
+    let state: MspTemplates;
+    try {
+      state = await this.mspApi.getTemplates(msp.id);
+    } catch {
+      return;
+    }
+    const everyClient = state.templates.filter((t) => t.allClients);
+    if (everyClient.length === 0) {
+      return;
+    }
+    const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
+    const items = await this.cipherService.getAllDecrypted(userId);
+    const problems: string[] = [];
+    let sent = 0;
+    for (const t of everyClient) {
+      const source = items.find((c) => c.id === t.sourceCipherId && !c.isDeleted);
+      if (source == null) {
+        problems.push("a template whose source you can't see (another MSP admin can send it)");
+        continue;
+      }
+      const result = await this.templateSender.send(msp, source, [client], state);
+      sent += result.sent.length;
+      problems.push(...result.failed.map((f) => `${source.name} (${f.error})`));
+    }
+    if (sent > 0) {
+      this.toast(`Sent ${sent === 1 ? "1 template" : sent + " templates"} to ${client.name}`);
+    }
+    if (problems.length > 0) {
+      this.toastService.showToast({
+        variant: "warning",
+        message: `${client.name} didn't get ${problems.join(", ")}.`,
+      });
+    }
+  }
+
+  private async loadTemplates(mspId: string) {
+    try {
+      this.templates.set(await this.mspApi.getTemplates(mspId));
+    } catch {
+      // A server without templates.
+      this.templates.set(null);
+    }
   }
 
   private async loadPolicies(mspId: string) {
@@ -872,6 +940,14 @@ export class KeykeeperMspComponent implements OnInit {
       await this.syncService.fullSync(false);
       const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
       const ciphers = await this.cipherService.getAllDecrypted(userId);
+      this.templateNames.set(
+        new Map(
+          ciphers.flatMap((c) => {
+            const definition = templateDefinition(c);
+            return definition ? [[definition.id, c.name] as [string, string]] : [];
+          }),
+        ),
+      );
       this.health.set(
         clientHealth(
           ciphers,

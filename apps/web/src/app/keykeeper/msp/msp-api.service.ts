@@ -142,6 +142,31 @@ export type DefaultPolicyResult = {
   refused: (NamedClient & { error: string })[];
 };
 
+/**
+ * Item templates the MSP sends: the source item, and every client or chosen
+ * ones. Copies and Templates collections cover the clients the caller reaches.
+ * The server never sees what's in a template.
+ */
+export type MspTemplates = {
+  templates: {
+    templateId: string;
+    sourceCipherId: string;
+    allClients: boolean;
+    clients: string[];
+    createdAt: string;
+  }[];
+  copies: {
+    organizationId: string;
+    templateId: string;
+    cipherId: string;
+    sourceRevision: string;
+  }[];
+  /** Each client's Templates collection, or null before its first template. */
+  collections: Record<string, string | null>;
+};
+
+export type TemplateCopy = { organizationId: string; cipherId: string; sourceRevision: string };
+
 type Pending = { organizationId: string; memberId: string; email: string; publicKey: string };
 
 @Injectable({ providedIn: "root" })
@@ -172,9 +197,9 @@ export class KeykeeperMspApiService {
   /**
    * Creates a client organization, with its keys made here, like upstream's
    * new organization. The Business preset also gets "Everyone" and "Admins"
-   * collections; the server turns on its policies.
+   * collections; the server turns on its policies. Returns the new client's id.
    */
-  async createClient(mspId: string, name: string, preset: ClientPreset): Promise<void> {
+  async createClient(mspId: string, name: string, preset: ClientPreset): Promise<string> {
     const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
     const [encryptedKey, key] = await this.keyService.makeOrgKey<OrgKey>(userId);
     const [publicKey, encryptedPrivateKey] = await this.keyService.makeKeyPair(key);
@@ -186,7 +211,7 @@ export class KeykeeperMspApiService {
     const adminsCollectionName = business
       ? (await this.encryptService.encryptString("Admins", key)).encryptedString
       : undefined;
-    await this.apiService.send(
+    const created = await this.apiService.send(
       "POST",
       `/keykeeper/msp/${mspId}/clients`,
       {
@@ -202,6 +227,63 @@ export class KeykeeperMspApiService {
     );
     await this.apiService.refreshIdentityToken();
     await this.syncService.fullSync(true);
+    return created.id;
+  }
+
+  async getTemplates(mspId: string): Promise<MspTemplates> {
+    return this.apiService.send("GET", `/keykeeper/msp/${mspId}/templates`, null, true, true);
+  }
+
+  /** Adds a template, or changes its source or which clients get it. */
+  async setTemplate(
+    mspId: string,
+    templateId: string,
+    template: { sourceCipherId: string; allClients: boolean; clients: string[] },
+  ): Promise<void> {
+    await this.apiService.send(
+      "PUT",
+      `/keykeeper/msp/${mspId}/templates/${templateId}`,
+      template,
+      true,
+      true,
+    );
+  }
+
+  /** Stops sending a template. Its copies stay unless they were deleted first. */
+  async stopTemplate(mspId: string, templateId: string): Promise<void> {
+    await this.apiService.send(
+      "DELETE",
+      `/keykeeper/msp/${mspId}/templates/${templateId}`,
+      null,
+      true,
+      false,
+    );
+  }
+
+  /** Records the copies just written into clients. */
+  async recordTemplateCopies(
+    mspId: string,
+    templateId: string,
+    copies: TemplateCopy[],
+  ): Promise<void> {
+    await this.apiService.send(
+      "POST",
+      `/keykeeper/msp/${mspId}/templates/${templateId}/copies`,
+      { copies },
+      true,
+      false,
+    );
+  }
+
+  /** Records a client's Templates collection. */
+  async setTemplatesCollection(mspId: string, orgId: string, collectionId: string): Promise<void> {
+    await this.apiService.send(
+      "PUT",
+      `/keykeeper/msp/${mspId}/clients/${orgId}/templates-collection`,
+      { collectionId },
+      true,
+      true,
+    );
   }
 
   /** The MSP's audit log, newest first, older than `before` if given. */

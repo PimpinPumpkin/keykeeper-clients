@@ -4,7 +4,10 @@ import { CalloutModule } from "@bitwarden/components";
 
 import { templateDefinition } from "./templates";
 
-/** Keykeeper: explains, in the item editor, that the item is a custom template. */
+/**
+ * Keykeeper: explains, in the item editor, that the item is a custom template,
+ * and for a copy an MSP sent, that the MSP's updates replace changes made here.
+ */
 @Component({
   selector: "vault-keykeeper-template-hint",
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -15,6 +18,9 @@ import { templateDefinition } from "./templates";
         This is a template for new {{ d.base === "login" ? "logins" : "notes" }}. Its name is the
         template's name, and new items start with its custom fields. Values you enter here become
         defaults.
+        @if (d.from) {
+          It comes from {{ d.from }}: when {{ d.from }} updates it, changes made here are replaced.
+        }
       </bit-callout>
     }
   `,

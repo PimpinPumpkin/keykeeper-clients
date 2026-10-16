@@ -209,4 +209,54 @@ describe("Keykeeper custom templates", () => {
       ["Built-in", BUILT_IN_TEMPLATES.map((t) => t.name)],
     ]);
   });
+
+  it("from an MSP are offered once under the MSP's name, however many clients send them", () => {
+    const copy = (
+      cipherId: string,
+      organizationId: string | null,
+      id: string,
+      name: string,
+      from?: string,
+    ) => ({
+      ...laptopTemplate,
+      id: cipherId,
+      name,
+      organizationId,
+      fields: [newTemplateDefinitionField("note", id, from)],
+    });
+    const groups = templateGroups(
+      [
+        copy("c1", "org-a", "fw", "Firewall", "Northwind IT"),
+        copy("c2", "org-z", "fw", "Firewall", "Northwind IT"),
+        copy("c3", "org-z", "m365", "Microsoft 365", "Northwind IT"),
+        copy("c4", "org-a", "own", "Front desk PC"),
+        // A "from" in someone's own vault isn't a copy an MSP sent.
+        copy("c5", null, "mine", "My server", "Northwind IT"),
+      ],
+      [
+        { id: "org-z", name: "Zeta Dental" },
+        { id: "org-a", name: "Acme Law" },
+      ],
+    );
+
+    expect(groups.map((g) => [g.name, g.templates.map((t) => t.name)])).toEqual([
+      ["From Northwind IT", ["Firewall", "Microsoft 365"]],
+      ["Acme Law", ["Front desk PC"]],
+      ["My templates", ["My server"]],
+      ["Built-in", BUILT_IN_TEMPLATES.map((t) => t.name)],
+    ]);
+  });
+
+  it("read the MSP a copy came from, and ignore a blank or overlong one", () => {
+    const withFrom = (from: string) => ({
+      fields: [newTemplateDefinitionField("note", "t1", from)],
+    });
+    expect(templateDefinition(withFrom(" Northwind IT "))).toEqual({
+      id: "t1",
+      base: "note",
+      from: "Northwind IT",
+    });
+    expect(templateDefinition(withFrom("   "))).toEqual({ id: "t1", base: "note" });
+    expect(templateDefinition(withFrom("x".repeat(101)))).toEqual({ id: "t1", base: "note" });
+  });
 });

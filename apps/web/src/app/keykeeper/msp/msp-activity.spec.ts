@@ -95,4 +95,26 @@ describe("MSP activity sentences", () => {
       ),
     ).toBe("Someone confirmed someone in a client");
   });
+
+  it("names templates the person can see, and calls others a template", () => {
+    const names = (id: string) => (id === "4f6c-fw" ? "Firewall" : undefined);
+    expect(
+      describeEvent(event({ event: "template_added", detail: "4f6c-fw:every client" }), names),
+    ).toBe("ana@northwind.test started sending Firewall to every client");
+    expect(
+      describeEvent(event({ event: "template_changed", detail: "4f6c-fw:2 clients" }), names),
+    ).toBe("ana@northwind.test now sends Firewall to 2 clients");
+    expect(
+      describeEvent(event({ event: "template_sent", detail: "4f6c-fw:1 client" }), names),
+    ).toBe("ana@northwind.test sent Firewall to Acme Dental");
+    expect(
+      describeEvent(
+        event({ event: "template_sent", detail: "4f6c-fw:3 clients", organizationName: null }),
+        names,
+      ),
+    ).toBe("ana@northwind.test sent Firewall to 3 clients");
+    expect(describeEvent(event({ event: "template_stopped", detail: "other-id" }), names)).toBe(
+      "ana@northwind.test stopped sending a template",
+    );
+  });
 });

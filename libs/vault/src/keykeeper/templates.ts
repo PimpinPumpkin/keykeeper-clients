@@ -10,6 +10,11 @@
 // people create, edit, share, and delete templates with the ordinary item
 // editor, and a template in an organization's collection reaches everyone who
 // can see that collection.
+//
+// An MSP sends its templates to its clients as copies with the same id, whose
+// definition names the MSP ("from"). They're offered once, under "From <MSP>",
+// however many of the MSP's clients someone sees. See DESIGN.md, "MSP
+// templates", in the keykeeper repo.
 
 import { CipherType, FieldType } from "@bitwarden/common/vault/enums";
 import { FieldView } from "@bitwarden/common/vault/models/view/field.view";
@@ -36,6 +41,8 @@ export type ItemTemplate = {
   fields: TemplateField[];
   /** For a custom template: the item that defines it, and its organization if any. */
   source?: { cipherId: string; organizationId: string | null };
+  /** For a copy an MSP sent: the MSP's name. */
+  from?: string;
 };
 
 const text = (label: string): TemplateField => ({ label, kind: "text" });
@@ -156,17 +163,28 @@ function parseJson(value: string | null | undefined): Record<string, unknown> | 
 const TEMPLATE_ID = /^[A-Za-z0-9-]{1,64}$/;
 const BASE_ICONS: Record<TemplateBase, string> = { login: "bwi-globe", note: "bwi-sticky-note" };
 
-/** The definition field for a new custom template. */
-export function newTemplateDefinitionField(base: TemplateBase, id = newGuid()): FieldView {
+/** The definition field for a custom template; `from` names the MSP for a copy it sends. */
+export function newTemplateDefinitionField(
+  base: TemplateBase,
+  id = newGuid(),
+  from?: string,
+): FieldView {
   const field = new FieldView();
   field.name = TEMPLATE_DEFINITION_FIELD_NAME;
   field.type = FieldType.Text;
-  field.value = JSON.stringify({ id, base, v: 1 });
+  field.value = JSON.stringify(from ? { id, base, v: 1, from } : { id, base, v: 1 });
   return field;
 }
 
-/** The id and base type of a custom template item, or null for any other item. */
-export function templateDefinition(item: ItemLike): { id: string; base: TemplateBase } | null {
+const MAX_FROM_LENGTH = 100;
+
+/**
+ * The id and base type of a custom template item, and the MSP it came from
+ * for a copy an MSP sent, or null for any other item.
+ */
+export function templateDefinition(
+  item: ItemLike,
+): { id: string; base: TemplateBase; from?: string } | null {
   const definition = parseJson(
     (item?.fields ?? []).find((f) => f.name === TEMPLATE_DEFINITION_FIELD_NAME)?.value,
   );
@@ -178,7 +196,10 @@ export function templateDefinition(item: ItemLike): { id: string; base: Template
   ) {
     return null;
   }
-  return { id: definition.id, base: definition.base };
+  const from = typeof definition.from === "string" ? definition.from.trim() : "";
+  return from && from.length <= MAX_FROM_LENGTH
+    ? { id: definition.id, base: definition.base, from }
+    : { id: definition.id, base: definition.base };
 }
 
 type TemplateItem = {
@@ -214,6 +235,7 @@ export function customTemplate(item: TemplateItem): ItemTemplate | null {
     base: definition.base,
     fields,
     source: { cipherId: item.id ?? "", organizationId: item.organizationId ?? null },
+    ...(definition.from ? { from: definition.from } : {}),
   };
 }
 
@@ -228,14 +250,27 @@ export function customTemplates(items: TemplateItem[]): ItemTemplate[] {
 export type TemplateGroup = { name: string; templates: readonly ItemTemplate[] };
 
 /**
- * Templates to choose from, grouped: each organization's (by organization
- * name), then the person's own, then built-in. Empty groups are left out.
+ * Templates to choose from, grouped: each MSP's (once each, however many of
+ * its clients the person sees), then each organization's own (by
+ * organization name), then the person's own, then built-in. Empty groups are
+ * left out.
  */
 export function templateGroups(
   items: TemplateItem[],
   organizations: { id: string; name: string }[],
 ): TemplateGroup[] {
-  const custom = customTemplates(items);
+  const all = customTemplates(items);
+  const fromMsp = all.filter((t) => t.from != null && t.source?.organizationId != null);
+  const custom = all.filter((t) => !fromMsp.includes(t));
+  const mspGroups: TemplateGroup[] = [...new Set(fromMsp.map((t) => t.from!))]
+    .sort((a, b) => a.localeCompare(b))
+    .map((msp) => {
+      const seen = new Set<string>();
+      return {
+        name: `From ${msp}`,
+        templates: fromMsp.filter((t) => t.from === msp && !seen.has(t.id) && seen.add(t.id)),
+      };
+    });
   const groups: TemplateGroup[] = [...organizations]
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((org) => ({
@@ -247,6 +282,7 @@ export function templateGroups(
     templates: custom.filter((t) => t.source?.organizationId == null),
   });
   return [
+    ...mspGroups,
     ...groups.filter((g) => g.templates.length > 0),
     { name: "Built-in", templates: BUILT_IN_TEMPLATES },
   ];
