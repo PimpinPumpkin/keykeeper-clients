@@ -227,12 +227,43 @@ function apply() {
 ];`,
   );
 
-  // 5. Browser extension manifests and icons.
+  // 5. Browser extension manifests and icons. Native messaging, which talks
+  //    to the desktop agent, is a required permission rather than upstream's
+  //    optional one, so biometric unlock needs no extra prompt or reload
+  //    (DESIGN.md, "Biometric unlock").
   for (const rel of ["apps/browser/src/manifest.json", "apps/browser/src/manifest.v3.json"]) {
     const manifest = JSON.parse(read(rel));
     if (manifest.author !== "Bitwarden Inc.") fail(`unexpected author in ${rel}`);
     manifest.author = BRAND.company;
+    for (const [key, list] of Object.entries(manifest)) {
+      if (/^(__\w+__)?optional_permissions$/.test(key) && Array.isArray(list)) {
+        manifest[key] = list.filter((p) => p !== "nativeMessaging");
+        const required = key.replace("optional_", "");
+        // Firefox's own list, where there is one; otherwise the shared list.
+        const target = Array.isArray(manifest[required]) ? required : "permissions";
+        if (!manifest[target].includes("nativeMessaging")) manifest[target].push("nativeMessaging");
+      }
+    }
     write(rel, brandText(JSON.stringify(manifest, null, 2)) + "\n");
+  }
+
+  // 5b. The desktop agent's native-messaging host. Upstream's name would
+  //     reach upstream's desktop app, if one is installed.
+  if (
+    typeof BRAND.nativeMessagingHost !== "string" ||
+    !/^[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(BRAND.nativeMessagingHost)
+  ) {
+    fail('brand.json needs "nativeMessagingHost", such as "com.example.agent".');
+  }
+  for (const rel of [
+    "apps/browser/src/background/nativeMessaging.background.ts",
+    "apps/browser/src/platform/ipc/transports/desktop-ipc.transport.ts",
+  ]) {
+    replaceAnchored(
+      rel,
+      /connectNative\("com\.8bit\.bitwarden"\)/,
+      `connectNative(${JSON.stringify(BRAND.nativeMessagingHost)})`,
+    );
   }
   for (const file of fs.readdirSync(path.join(GEN, "browser"))) {
     copyInto(path.join(GEN, "browser", file), `apps/browser/src/images/${file}`);

@@ -33,10 +33,12 @@ fn main() {
             "pub const NAME: &str = {:?};\n\
              pub const DOMAIN: &str = {:?};\n\
              pub const WEB_VAULT_URL: &str = {:?};\n\
+             pub const NATIVE_MESSAGING_HOST: &str = {:?};\n\
              pub const UPDATE_KEY: &str = {:?};\n",
             text("/name"),
             text("/domain"),
             text("/urls/webVault"),
+            text("/nativeMessagingHost"),
             update_key.trim(),
         ),
     )
