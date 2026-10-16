@@ -115,6 +115,31 @@ export type ClientEnrollment = { token: string | null; createdAt: string | null;
 export type ClientMsp = {
   msp: { id: string; name: string } | null;
   staff: { memberId: string; email: string; name: string | null }[];
+  /** Policies where the organization has its own setting rather than the MSP's default. Older servers leave it out. */
+  ownPolicies?: { type: number; name: string }[];
+};
+
+/** A policy: on or off, with its options as upstream stores them. */
+export type MspPolicy = { type: number; enabled: boolean; data: any };
+
+/**
+ * The MSP's default policies, and for each client the caller reaches, the
+ * policies where it has its own setting. `types` are the policies this server
+ * offers, in order.
+ */
+export type MspPolicies = {
+  types: number[];
+  defaults: MspPolicy[];
+  clients: { id: string; name: string; own: MspPolicy[] }[];
+};
+
+type NamedClient = { id: string; name: string };
+
+/** What changing a default did: clients that changed, kept their own setting, or refused it. */
+export type DefaultPolicyResult = {
+  changed: NamedClient[];
+  kept: NamedClient[];
+  refused: (NamedClient & { error: string })[];
 };
 
 type Pending = { organizationId: string; memberId: string; email: string; publicKey: string };
@@ -215,6 +240,40 @@ export class KeykeeperMspApiService {
   /** For a client's owners and admins: the MSP that manages the organization, and its staff there. */
   async getOrganizationMsp(orgId: string): Promise<ClientMsp> {
     return this.apiService.send("GET", `/keykeeper/organizations/${orgId}/msp`, null, true, true);
+  }
+
+  async getPolicies(mspId: string): Promise<MspPolicies> {
+    return this.apiService.send("GET", `/keykeeper/msp/${mspId}/policies`, null, true, true);
+  }
+
+  /** Changes a default, and with it every client that follows it. */
+  async setDefaultPolicy(
+    mspId: string,
+    type: number,
+    policy: { enabled: boolean; data: any },
+  ): Promise<DefaultPolicyResult> {
+    return this.apiService.send(
+      "PUT",
+      `/keykeeper/msp/${mspId}/policies/${type}`,
+      policy,
+      true,
+      true,
+    );
+  }
+
+  /** Puts clients back on the default for one policy, replacing their own setting. */
+  async useDefaultPolicy(
+    mspId: string,
+    type: number,
+    clients: string[],
+  ): Promise<Omit<DefaultPolicyResult, "kept">> {
+    return this.apiService.send(
+      "POST",
+      `/keykeeper/msp/${mspId}/policies/${type}/apply`,
+      { clients },
+      true,
+      true,
+    );
   }
 
   /** For a client's own owners: removes the MSP and all of its staff from the organization. */

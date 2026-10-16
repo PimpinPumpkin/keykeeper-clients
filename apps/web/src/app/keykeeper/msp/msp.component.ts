@@ -1,11 +1,13 @@
-import { ChangeDetectionStrategy, Component, OnInit, signal } from "@angular/core";
+import { ChangeDetectionStrategy, Component, OnInit, computed, signal } from "@angular/core";
 import { FormBuilder, Validators } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 
+import { Organization } from "@bitwarden/common/admin-console/models/domain/organization";
 import { AccountService } from "@bitwarden/common/auth/abstractions/account.service";
 import { getUserId } from "@bitwarden/common/auth/services/account.service";
 import { ErrorResponse } from "@bitwarden/common/models/response/error.response";
+import { ConfigService } from "@bitwarden/common/platform/abstractions/config/config.service";
 import { EnvironmentService } from "@bitwarden/common/platform/abstractions/environment.service";
 import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.service";
 import { PlatformUtilsService } from "@bitwarden/common/platform/abstractions/platform-utils.service";
@@ -14,10 +16,15 @@ import { PasswordStrengthServiceAbstraction } from "@bitwarden/common/tools/pass
 import { CipherService } from "@bitwarden/common/vault/abstractions/cipher.service";
 import { DialogService, ToastService } from "@bitwarden/components";
 
+import {
+  BasePolicyEditDefinition,
+  ossPolicyEditRegister,
+} from "../../admin-console/organizations/policies";
 import { HeaderModule } from "../../layouts/header/header.module";
 import { SharedModule } from "../../shared";
 
 import { ClientHealth, clientHealth } from "./client-health";
+import { KeykeeperDefaultPoliciesComponent } from "./default-policies.component";
 import { describeEvent, MspEvent } from "./msp-activity";
 import {
   ClientEnrollment,
@@ -27,15 +34,28 @@ import {
   MspClient,
   MspInvite,
   MspDetails,
+  MspPolicies,
   MspRole,
   MspStaffMember,
   TechnicianAccess,
 } from "./msp-api.service";
+import { clientPolicySummary } from "./msp-policies";
 import { DEFAULT_ACCESS, describeAccess, reachesEveryClient } from "./technician-access";
 import { KeykeeperTechnicianAccessEditorComponent } from "./technician-access-editor.component";
 
 const CONFIRMED = 2;
 const EVENTS_PER_PAGE = 50;
+
+/**
+ * Plan features every client on our server has, for upstream's checks of
+ * which policies to show. Which policies the server supports comes from the
+ * server.
+ */
+const CLIENT_FEATURES = {
+  useResetPassword: true,
+  useSso: false,
+  useAutomaticUserConfirmation: false,
+} as Organization;
 
 /**
  * Keykeeper: the MSP console. Every client at a glance, with a way into each
@@ -46,7 +66,12 @@ const EVENTS_PER_PAGE = 50;
 @Component({
   selector: "app-keykeeper-msp",
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [SharedModule, HeaderModule, KeykeeperTechnicianAccessEditorComponent],
+  imports: [
+    SharedModule,
+    HeaderModule,
+    KeykeeperDefaultPoliciesComponent,
+    KeykeeperTechnicianAccessEditorComponent,
+  ],
   template: `
     <app-header></app-header>
     <bit-container>
@@ -92,6 +117,9 @@ const EVENTS_PER_PAGE = 50;
               <ng-container header>
                 <tr>
                   <th bitCell>Client</th>
+                  <th bitCell title="Default policies, or how many policies are the client's own">
+                    Policies
+                  </th>
                   <th bitCell>Members</th>
                   <th bitCell>Waiting</th>
                   <th bitCell>Invited</th>
@@ -104,14 +132,8 @@ const EVENTS_PER_PAGE = 50;
               <ng-template body>
                 @for (client of m.clients; track client.id) {
                   <tr bitRow [attr.data-testid]="'msp-client-' + client.name">
-                    <td bitCell>
-                      {{ client.name }}
-                      @if (client.preset === "business") {
-                        <span bitBadge variant="secondary" class="tw-ml-2" title="Business defaults"
-                          >Business</span
-                        >
-                      }
-                    </td>
+                    <td bitCell>{{ client.name }}</td>
+                    <td bitCell data-testid="msp-client-policies">{{ policySummary(client) }}</td>
                     <td bitCell data-testid="msp-client-members">{{ client.members.confirmed }}</td>
                     <td bitCell data-testid="msp-client-waiting">{{ client.members.accepted }}</td>
                     <td bitCell>{{ client.members.invited }}</td>
@@ -216,9 +238,9 @@ const EVENTS_PER_PAGE = 50;
                 <input bitInput formControlName="name" />
               </bit-form-field>
               <bit-form-field disableMargin class="tw-min-w-48">
-                <bit-label>Defaults</bit-label>
+                <bit-label>Policies</bit-label>
                 <select bitInput formControlName="preset">
-                  <option value="business">Business (recommended)</option>
+                  <option value="business">Default policies (recommended)</option>
                   <option value="none">None</option>
                 </select>
               </bit-form-field>
@@ -226,6 +248,17 @@ const EVENTS_PER_PAGE = 50;
             </form>
           }
         </section>
+
+        @if (policies(); as p) {
+          <app-keykeeper-default-policies
+            [mspId]="m.id"
+            [isAdmin]="m.role === 'admin'"
+            [policies]="p"
+            [definitions]="policyDefinitions()"
+            [organizationId]="keyedClientId()"
+            (changed)="reload(m.id)"
+          />
+        }
 
         <section aria-label="Staff">
           <h2 bitTypography="h3">Staff</h2>
@@ -486,6 +519,15 @@ export class KeykeeperMspComponent implements OnInit {
   protected readonly moreEvents = signal(false);
   protected readonly describe = describeEvent;
 
+  /** The default policies, and which clients have their own settings. Older servers have none. */
+  protected readonly policies = signal<MspPolicies | null>(null);
+  /** Upstream's forms for the policies the server offers, in the admin console's order. */
+  protected readonly policyDefinitions = signal<BasePolicyEditDefinition[]>([]);
+  /** A client whose key the person holds, for upstream's policy forms. */
+  protected readonly keyedClientId = computed(
+    () => this.msp()?.clients.find((c) => c.you?.status === CONFIRMED)?.id,
+  );
+
   /** Password health per client, computed here from items MSP staff can decrypt. */
   protected readonly health = signal<Map<string, ClientHealth> | null>(null);
   protected readonly installFor = signal<{
@@ -528,6 +570,7 @@ export class KeykeeperMspComponent implements OnInit {
     private readonly syncService: SyncService,
     private readonly route: ActivatedRoute,
     private readonly router: Router,
+    private readonly configService: ConfigService,
   ) {}
 
   async ngOnInit() {
@@ -768,13 +811,46 @@ export class KeykeeperMspComponent implements OnInit {
     });
   }
 
-  private async reload(mspId: string) {
+  protected async reload(mspId: string) {
     const msp = await this.mspApi.get(mspId);
     this.msp.set(msp);
     void this.computeHealth(msp);
+    await this.loadPolicies(mspId);
     const events = await this.mspApi.listEvents(mspId);
     this.events.set(events);
     this.moreEvents.set(events.length === EVENTS_PER_PAGE);
+  }
+
+  private async loadPolicies(mspId: string) {
+    let policies: MspPolicies;
+    try {
+      policies = await this.mspApi.getPolicies(mspId);
+    } catch {
+      // A server without default policies.
+      this.policies.set(null);
+      return;
+    }
+    if (this.policyDefinitions().length === 0) {
+      const definitions: BasePolicyEditDefinition[] = [];
+      for (const definition of ossPolicyEditRegister) {
+        if (
+          policies.types.includes(definition.type) &&
+          (await firstValueFrom(definition.display$(CLIENT_FEATURES, this.configService)))
+        ) {
+          definitions.push(definition);
+        }
+      }
+      this.policyDefinitions.set(definitions);
+    }
+    this.policies.set(policies);
+  }
+
+  protected policySummary(client: MspClient): string {
+    return clientPolicySummary(
+      this.policies(),
+      client.id,
+      this.policyDefinitions().map((d) => d.type),
+    );
   }
 
   protected async showOlder() {

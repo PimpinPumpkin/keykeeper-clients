@@ -23,7 +23,12 @@ export function describeEvent(e: MspEvent): string {
     case "msp_created":
       return `${actor} set up ${e.detail ?? "the MSP"}`;
     case "client_created":
-      return `${actor} added the client ${org}${e.detail === "Business defaults" ? " with Business defaults" : ""}`;
+      // Clients added before default policies started with "Business defaults".
+      return `${actor} added the client ${org}${e.detail === "Default policies" || e.detail === "Business defaults" ? " with the default policies" : ""}`;
+    case "default_policy_changed":
+      return `${actor} set the default ${e.detail ?? "policy"}`;
+    case "client_policy_default":
+      return `${actor} put ${org} back on the default ${e.detail ?? "policy"}`;
     case "staff_added":
       return `${actor} added ${target} as ${roleName(e.detail)}`;
     case "staff_invited":

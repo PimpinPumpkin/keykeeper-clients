@@ -17,8 +17,23 @@ describe("MSP activity sentences", () => {
   it.each([
     [{ event: "msp_created", detail: "Northwind IT" }, "ana@northwind.test set up Northwind IT"],
     [
+      { event: "client_created", detail: "Default policies" },
+      "ana@northwind.test added the client Acme Dental with the default policies",
+    ],
+    [
       { event: "client_created", detail: "Business defaults" },
-      "ana@northwind.test added the client Acme Dental with Business defaults",
+      "ana@northwind.test added the client Acme Dental with the default policies",
+    ],
+    [
+      {
+        event: "default_policy_changed",
+        detail: "Require two-step login to on: 3 clients changed, 1 client kept its own setting",
+      },
+      "ana@northwind.test set the default Require two-step login to on: 3 clients changed, 1 client kept its own setting",
+    ],
+    [
+      { event: "client_policy_default", detail: "Master password requirements" },
+      "ana@northwind.test put Acme Dental back on the default Master password requirements",
     ],
     [
       { event: "client_created", detail: "No defaults" },

@@ -14,6 +14,8 @@
     ></i>
     <span class="tw-sr-only">{{ "loading" | i18n }}</span>
   } @else {
+    <!-- Keykeeper: the MSP's default policies, if an MSP manages this organization -->
+    <app-keykeeper-client-msp-policies class="tw-mb-4 tw-block" [organization]="organization" />
     @for (section of policySections; track section.category) {
       <bit-section>
         <bit-section-header>
