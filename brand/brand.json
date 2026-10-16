@@ -1,20 +1,20 @@
 {
-  "name": "Keykeeper",
-  "nameFull": "Keykeeper Password Manager",
-  "company": "Keykeeper",
-  "domain": "keykeeper.example",
+  "name": "PassBundle",
+  "nameFull": "PassBundle Password Manager",
+  "company": "PassBundle",
+  "domain": "passbundle.example",
   "color": "#1F6F5C",
   "urls": {
-    "website": "https://keykeeper.example",
-    "help": "https://keykeeper.example/help",
-    "api": "https://api.keykeeper.example",
-    "identity": "https://identity.keykeeper.example",
-    "icons": "https://icons.keykeeper.example",
-    "webVault": "https://vault.keykeeper.example",
-    "notifications": "https://notifications.keykeeper.example",
-    "events": "https://events.keykeeper.example",
-    "scim": "https://scim.keykeeper.example",
-    "send": "https://send.keykeeper.example"
+    "website": "https://passbundle.example",
+    "help": "https://passbundle.example/help",
+    "api": "https://api.passbundle.example",
+    "identity": "https://identity.passbundle.example",
+    "icons": "https://icons.passbundle.example",
+    "webVault": "https://vault.passbundle.example",
+    "notifications": "https://notifications.passbundle.example",
+    "events": "https://events.passbundle.example",
+    "scim": "https://scim.passbundle.example",
+    "send": "https://send.passbundle.example"
   },
-  "installScript": "Install-Keykeeper.ps1"
+  "installScript": "Install-PassBundle.ps1"
 }
