@@ -2,7 +2,7 @@
 
 PassBundle's desktop app: a tray app (menu bar on macOS) with no windows, written in Rust. It replaces upstream's Electron desktop app, which we don't ship. The design is in the meta repo's DESIGN.md, "Desktop agent".
 
-Version 0.1 is the foundation: the tray icon and menu (the version, Open web vault, Quit), one agent per signed-in user, settings by policy, and a self-updater that installs only releases signed with our offline update key. Next come Windows Hello and Touch ID unlock for the extension, then the MSP background work the web vault and extension already do.
+Version 0.1 is the foundation: the tray icon and menu (the version, Open web vault, Quit), one agent per signed-in user, settings by policy, and a self-updater that installs only releases signed with our offline update key. It also unlocks the browser extension with Windows Hello (DESIGN.md, "Biometric unlock"): the extension speaks upstream's native-messaging protocol to `passbundle-agent-host`, which the browser starts, and the host pipes it to the agent over a socket only the signed-in user can open.
 
 ## Why it's its own workspace
 
@@ -67,6 +67,7 @@ Then publish the manifest, its `.minisig`, and the binary under the site's `agen
 
 ## Not built yet
 
-- Installing the agent from `Install-PassBundle.ps1`, with autostart and the update task. Waits on signed builds (Authenticode on Windows, a Developer ID on macOS).
-- Windows Hello and Touch ID unlock for the extension. The extension holds the keys and the agent has no login, so the extension hands the agent the user key when someone turns biometric unlock on. That's a change to key handling, so it gets a design note and test vectors first.
+- Installing the agent from `Install-PassBundle.ps1`, with autostart, the update task, and the native-messaging host registered for Chrome, Edge, and Firefox. Waits on signed builds (Authenticode on Windows, a Developer ID on macOS).
+- Touch ID on macOS, which needs the agent signed with our Apple developer ID.
+- A check of Windows Hello on real hardware: CI machines have none, so Tier 1 uses a stand-in (`--features test-authenticator`, which release builds refuse).
 - The MSP background work (confirming members, keeping template copies current).
