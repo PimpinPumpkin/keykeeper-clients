@@ -24,13 +24,13 @@ import { UserId } from "@bitwarden/common/types/guid";
 import { TaskService } from "@bitwarden/common/vault/tasks";
 import { KeyService as KeyServiceAbstraction } from "@bitwarden/key-management";
 
-import { KeykeeperTemplateSync } from "../keykeeper/msp/msp-template-sync.service";
+import { KeykeeperMspWorkService } from "../keykeeper/msp/msp-work.service";
 import { VersionService } from "../platform/version.service";
 
 @Injectable()
 export class InitService {
-  // Keykeeper: keeps MSP clients' templates current in an MSP admin's vault.
-  private readonly keykeeperTemplateSync = inject(KeykeeperTemplateSync);
+  // Keykeeper: an MSP's background work (confirming members, keeping templates current).
+  private readonly keykeeperMspWork = inject(KeykeeperMspWorkService);
 
   constructor(
     @Inject(WINDOW) private win: Window,
@@ -84,8 +84,8 @@ export class InitService {
         await this.sharedUnlockFollowerService.start();
       }
       this.taskService.listenForTaskNotifications();
-      // Keykeeper: see KeykeeperTemplateSync.
-      this.keykeeperTemplateSync.start();
+      // Keykeeper: see KeykeeperMspWork.
+      this.keykeeperMspWork.start();
 
       const containerService = new ContainerService(this.keyService, this.encryptService);
       containerService.attachToGlobal(this.win);

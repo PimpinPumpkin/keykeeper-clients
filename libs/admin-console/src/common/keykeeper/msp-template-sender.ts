@@ -5,10 +5,8 @@
 // each copy is and which version of the source it was made from. See
 // DESIGN.md, "MSP templates".
 
-import { Injectable } from "@angular/core";
 import { firstValueFrom } from "rxjs";
 
-import { CollectionAdminService } from "@bitwarden/admin-console/common";
 import { CollectionAdminView } from "@bitwarden/common/admin-console/models/collections";
 import { AccountService } from "@bitwarden/common/auth/abstractions/account.service";
 import { getUserId } from "@bitwarden/common/auth/services/account.service";
@@ -17,16 +15,19 @@ import { SyncService } from "@bitwarden/common/platform/sync";
 import { CollectionId, OrganizationId, UserId } from "@bitwarden/common/types/guid";
 import { CipherService } from "@bitwarden/common/vault/abstractions/cipher.service";
 import { CipherType, SecureNoteType } from "@bitwarden/common/vault/enums";
-import { CipherView } from "@bitwarden/common/vault/models/view/cipher.view";
-import { FieldView } from "@bitwarden/common/vault/models/view/field.view";
-import { SecureNoteView } from "@bitwarden/common/vault/models/view/secure-note.view";
 import {
   newTemplateDefinitionField,
   TEMPLATE_DEFINITION_FIELD_NAME,
   templateDefinition,
-} from "@bitwarden/vault";
+} from "@bitwarden/common/vault/keykeeper/templates";
+import { CipherView } from "@bitwarden/common/vault/models/view/cipher.view";
+import { FieldView } from "@bitwarden/common/vault/models/view/field.view";
+import { SecureNoteView } from "@bitwarden/common/vault/models/view/secure-note.view";
 
-import { KeykeeperMspApiService, MspTemplates, TemplateCopy } from "./msp-api.service";
+import { CollectionAdminService } from "../collections";
+
+import { KeykeeperMspRequests } from "./msp-requests";
+import { MspTemplates, TemplateCopy } from "./msp-types";
 
 type NamedClient = { id: string; name: string };
 
@@ -35,10 +36,9 @@ export type SendResult = {
   failed: (NamedClient & { error: string })[];
 };
 
-@Injectable({ providedIn: "root" })
 export class KeykeeperTemplateSender {
   constructor(
-    private readonly mspApi: KeykeeperMspApiService,
+    private readonly mspApi: KeykeeperMspRequests,
     private readonly cipherService: CipherService,
     private readonly collectionAdminService: CollectionAdminService,
     private readonly accountService: AccountService,

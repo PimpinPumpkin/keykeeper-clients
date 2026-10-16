@@ -6,188 +6,62 @@
 import { Injectable } from "@angular/core";
 import { firstValueFrom } from "rxjs";
 
-import { OrganizationUserService } from "@bitwarden/admin-console/common";
+import {
+  AddStaffResult,
+  ClientEnrollment,
+  ClientMsp,
+  ClientPreset,
+  DefaultPolicyResult,
+  InvitationInfo,
+  KeykeeperMspRequests,
+  MspPolicies,
+  MspRole,
+  MspSummary,
+  TechnicianAccess,
+} from "@bitwarden/admin-console/common";
 import { ApiService } from "@bitwarden/common/abstractions/api.service";
-import { OrganizationService } from "@bitwarden/common/admin-console/abstractions/organization/organization.service.abstraction";
 import { AccountService } from "@bitwarden/common/auth/abstractions/account.service";
 import { getUserId } from "@bitwarden/common/auth/services/account.service";
 import { EncryptService } from "@bitwarden/common/key-management/crypto/abstractions/encrypt.service";
 import { I18nService } from "@bitwarden/common/platform/abstractions/i18n.service";
-import { Utils } from "@bitwarden/common/platform/misc/utils";
 import { SyncService } from "@bitwarden/common/platform/sync";
 import { OrgKey } from "@bitwarden/common/types/key";
 import { KeyService } from "@bitwarden/key-management";
 
 import { MspEvent } from "./msp-activity";
 
-export type MspRole = "admin" | "technician";
-
-/** The defaults a new client starts with. "business" is the Business preset. */
-export type ClientPreset = "business" | "none";
-
-export type MspSummary = { id: string; name: string; role: MspRole };
-
-export type MspClient = {
-  id: string;
-  name: string;
-  createdAt: string;
-  preset: "business" | null;
-  members: { confirmed: number; accepted: number; invited: number; revoked: number };
-  /**
-   * The caller's own membership there, if any. Status 2 is confirmed; type 0 is
-   * owner and 1 admin. vaultItems: whether they see every item there.
-   */
-  you: { memberId: string; status: number; type: number; vaultItems?: boolean } | null;
-};
-
-/** The custom role permissions the server enforces. */
-export type CustomPermissions = {
-  manageUsers: boolean;
-  manageResetPassword: boolean;
-  managePolicies: boolean;
-  accessEventLogs: boolean;
-  accessImportExport: boolean;
-};
-
-/**
- * What a technician gets in the MSP's clients: every client or chosen ones,
- * admin or a custom role inside them, and whether they see install commands.
- * MSP admins are owners of every client, so they have none.
- */
-export type TechnicianAccess = {
-  allClients: boolean;
-  /** With allClients false, the clients they reach. */
-  clients: string[];
-  /** A custom role in each client, or null for admin. vaultItems: every item there. */
-  custom: { permissions: CustomPermissions; vaultItems: boolean } | null;
-  installCommands: boolean;
-};
-
-export type MspStaffMember = {
-  userId: string;
-  email: string;
-  name: string | null;
-  role: MspRole;
-  /** A technician's access. Only MSP admins see it. */
-  access: TechnicianAccess | null;
-};
-
-export type MspInvite = {
-  id: string;
-  email: string;
-  role: MspRole;
-  /** The access a technician gets on joining. Only MSP admins see it. */
-  access: TechnicianAccess | null;
-  createdAt: string;
-};
-
-export type MspDetails = MspSummary & {
-  /** A technician's own access; null for MSP admins. Older servers leave it out. */
-  access?: TechnicianAccess | null;
-  staff: MspStaffMember[];
-  invites: MspInvite[];
-  /** For a technician limited to chosen clients, just those. */
-  clients: MspClient[];
-};
-
-/** Adding staff: added at once, or invited when they don't have an account yet. */
-export type AddStaffResult =
-  | { invited: false; email: string; role: MspRole }
-  | {
-      invited: true;
-      inviteId: string;
-      email: string;
-      role: MspRole;
-      inviteUrl: string;
-      emailed: boolean;
-    };
-
-export type InvitationInfo = {
-  mspName: string;
-  role: MspRole;
-  email: string;
-  invitedBy: string;
-  forYou: boolean;
-};
-
-export type ClientEnrollment = { token: string | null; createdAt: string | null; joins: number };
-
-export type ClientMsp = {
-  msp: { id: string; name: string } | null;
-  staff: { memberId: string; email: string; name: string | null }[];
-  /** Policies where the organization has its own setting rather than the MSP's default. Older servers leave it out. */
-  ownPolicies?: { type: number; name: string }[];
-};
-
-/** A policy: on or off, with its options as upstream stores them. */
-export type MspPolicy = { type: number; enabled: boolean; data: any };
-
-/**
- * The MSP's default policies, and for each client the caller reaches, the
- * policies where it has its own setting. `types` are the policies this server
- * offers, in order.
- */
-export type MspPolicies = {
-  types: number[];
-  defaults: MspPolicy[];
-  clients: { id: string; name: string; own: MspPolicy[] }[];
-};
-
-type NamedClient = { id: string; name: string };
-
-/** What changing a default did: clients that changed, kept their own setting, or refused it. */
-export type DefaultPolicyResult = {
-  changed: NamedClient[];
-  kept: NamedClient[];
-  refused: (NamedClient & { error: string })[];
-};
-
-/**
- * Item templates the MSP sends: the source item, and every client or chosen
- * ones. Copies and Templates collections cover the clients the caller reaches.
- * The server never sees what's in a template.
- */
-export type MspTemplates = {
-  templates: {
-    templateId: string;
-    sourceCipherId: string;
-    allClients: boolean;
-    clients: string[];
-    createdAt: string;
-  }[];
-  copies: {
-    organizationId: string;
-    templateId: string;
-    cipherId: string;
-    sourceRevision: string;
-  }[];
-  /** Each client's Templates collection, or null before its first template. */
-  collections: Record<string, string | null>;
-};
-
-export type TemplateCopy = { organizationId: string; cipherId: string; sourceRevision: string };
-
-type Pending = { organizationId: string; memberId: string; email: string; publicKey: string };
+export type {
+  MspRole,
+  ClientPreset,
+  MspSummary,
+  MspClient,
+  CustomPermissions,
+  TechnicianAccess,
+  MspStaffMember,
+  MspInvite,
+  MspDetails,
+  AddStaffResult,
+  InvitationInfo,
+  ClientEnrollment,
+  ClientMsp,
+  MspPolicy,
+  MspPolicies,
+  DefaultPolicyResult,
+  MspTemplates,
+  TemplateCopy,
+} from "@bitwarden/admin-console/common";
 
 @Injectable({ providedIn: "root" })
-export class KeykeeperMspApiService {
+export class KeykeeperMspApiService extends KeykeeperMspRequests {
   constructor(
-    private readonly apiService: ApiService,
+    apiService: ApiService,
     private readonly accountService: AccountService,
     private readonly keyService: KeyService,
     private readonly encryptService: EncryptService,
     private readonly i18nService: I18nService,
-    private readonly organizationService: OrganizationService,
-    private readonly organizationUserService: OrganizationUserService,
     private readonly syncService: SyncService,
-  ) {}
-
-  async list(): Promise<MspSummary[]> {
-    return (await this.apiService.send("GET", "/keykeeper/msp", null, true, true)).data;
-  }
-
-  async get(mspId: string): Promise<MspDetails> {
-    return this.apiService.send("GET", `/keykeeper/msp/${mspId}`, null, true, true);
+  ) {
+    super(apiService);
   }
 
   async create(name: string): Promise<MspSummary> {
@@ -230,10 +104,6 @@ export class KeykeeperMspApiService {
     return created.id;
   }
 
-  async getTemplates(mspId: string): Promise<MspTemplates> {
-    return this.apiService.send("GET", `/keykeeper/msp/${mspId}/templates`, null, true, true);
-  }
-
   /** Adds a template, or changes its source or which clients get it. */
   async setTemplate(
     mspId: string,
@@ -257,32 +127,6 @@ export class KeykeeperMspApiService {
       null,
       true,
       false,
-    );
-  }
-
-  /** Records the copies just written into clients. */
-  async recordTemplateCopies(
-    mspId: string,
-    templateId: string,
-    copies: TemplateCopy[],
-  ): Promise<void> {
-    await this.apiService.send(
-      "POST",
-      `/keykeeper/msp/${mspId}/templates/${templateId}/copies`,
-      { copies },
-      true,
-      false,
-    );
-  }
-
-  /** Records a client's Templates collection. */
-  async setTemplatesCollection(mspId: string, orgId: string, collectionId: string): Promise<void> {
-    await this.apiService.send(
-      "PUT",
-      `/keykeeper/msp/${mspId}/clients/${orgId}/templates-collection`,
-      { collectionId },
-      true,
-      true,
     );
   }
 
@@ -436,38 +280,5 @@ export class KeykeeperMspApiService {
       true,
       false,
     );
-  }
-
-  /**
-   * Confirms every membership waiting for an org key that this person can give,
-   * with upstream's confirm request. Returns how many were confirmed.
-   */
-  async confirmPending(mspId: string): Promise<number> {
-    const pending: Pending[] = (
-      await this.apiService.send("GET", `/keykeeper/msp/${mspId}/pending`, null, true, true)
-    ).data;
-    if (pending.length === 0) {
-      return 0;
-    }
-    // Org keys for clients created or joined since the last sync.
-    await this.syncService.fullSync(false);
-    const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
-    const organizations = await firstValueFrom(this.organizationService.organizations$(userId));
-    let confirmed = 0;
-    for (const p of pending) {
-      const organization = organizations.find((o) => o.id === p.organizationId);
-      if (organization == null) {
-        continue;
-      }
-      await firstValueFrom(
-        this.organizationUserService.confirmUser(
-          organization,
-          p.memberId,
-          Utils.fromB64ToArray(p.publicKey),
-        ),
-      );
-      confirmed++;
-    }
-    return confirmed;
   }
 }

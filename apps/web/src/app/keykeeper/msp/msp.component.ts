@@ -42,8 +42,8 @@ import {
   TechnicianAccess,
 } from "./msp-api.service";
 import { clientPolicySummary } from "./msp-policies";
-import { KeykeeperTemplateSync } from "./msp-template-sync.service";
 import { KeykeeperMspTemplatesComponent } from "./msp-templates.component";
+import { KeykeeperMspWorkService } from "./msp-work.service";
 import { DEFAULT_ACCESS, describeAccess, reachesEveryClient } from "./technician-access";
 import { KeykeeperTechnicianAccessEditorComponent } from "./technician-access-editor.component";
 
@@ -586,7 +586,7 @@ export class KeykeeperMspComponent implements OnInit {
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly configService: ConfigService,
-    private readonly templateSync: KeykeeperTemplateSync,
+    private readonly work: KeykeeperMspWorkService,
   ) {}
 
   async ngOnInit() {
@@ -604,7 +604,7 @@ export class KeykeeperMspComponent implements OnInit {
         await this.confirmWaiting(first.id);
         await this.reload(first.id);
         // Brings clients' templates up to date; the section reloads if anything changed.
-        void this.templateSync.updateNow();
+        void this.work.run();
       }
     } catch (e) {
       this.showError(e);
@@ -638,7 +638,7 @@ export class KeykeeperMspComponent implements OnInit {
       this.clientForm.reset({ name: "", preset: "business" });
       this.toast(`Added ${name}`);
       // Templates for every client apply to the new one too.
-      const failures = await this.templateSync.updateNow();
+      const failures = await this.work.run();
       if (failures.length > 0) {
         this.toastService.showToast({
           variant: "warning",
@@ -939,9 +939,15 @@ export class KeykeeperMspComponent implements OnInit {
   }
 
   private async confirmWaiting(mspId: string) {
-    const confirmed = await this.mspApi.confirmPending(mspId);
+    const { confirmed, failed } = await this.work.confirmPending(mspId);
     if (confirmed > 0) {
       this.toast(confirmed === 1 ? "Confirmed 1 member" : `Confirmed ${confirmed} members`);
+    }
+    if (failed.length > 0) {
+      this.toastService.showToast({
+        variant: "error",
+        message: `Couldn't confirm ${failed.join("; ")}`,
+      });
     }
   }
 

@@ -1,0 +1,251 @@
+// Keykeeper: an MSP's background work, so clients stay set up without anyone
+// opening the MSP console. It confirms members waiting for their org key in
+// clients where the person can (giving the org key the normal way, encrypted
+// to the member's public key), and keeps clients' copies of the MSP's
+// templates current. Both need the person's unlocked keys, so this runs in the
+// web vault and the browser extension of MSP staff while they're unlocked.
+// See DESIGN.md, "MSP console" and "MSP templates".
+
+import { EMPTY, Observable, Subject, debounceTime, firstValueFrom, switchMap } from "rxjs";
+
+import { OrganizationService } from "@bitwarden/common/admin-console/abstractions/organization/organization.service.abstraction";
+import { AccountService } from "@bitwarden/common/auth/abstractions/account.service";
+import { AuthService } from "@bitwarden/common/auth/abstractions/auth.service";
+import { AuthenticationStatus } from "@bitwarden/common/auth/enums/authentication-status";
+import { getUserId } from "@bitwarden/common/auth/services/account.service";
+import { ErrorResponse } from "@bitwarden/common/models/response/error.response";
+import { Utils } from "@bitwarden/common/platform/misc/utils";
+import { SyncService } from "@bitwarden/common/platform/sync";
+import { CipherService } from "@bitwarden/common/vault/abstractions/cipher.service";
+import { templateDefinition } from "@bitwarden/common/vault/keykeeper/templates";
+import { CipherView } from "@bitwarden/common/vault/models/view/cipher.view";
+
+import { OrganizationUserService } from "../organization-user";
+
+import { KeykeeperMspRequests } from "./msp-requests";
+import { KeykeeperTemplateSender } from "./msp-template-sender";
+import { knownItems, templateRows } from "./msp-template-status";
+import { MspDetails, MspTemplates } from "./msp-types";
+
+const CONFIRMED = 2;
+/** Waits for a burst of changes, such as a sync, to settle. */
+const SETTLE_MS = 3000;
+
+export type ConfirmResult = { confirmed: number; failed: string[] };
+
+const message = (e: unknown) =>
+  e instanceof ErrorResponse ? e.getSingleMessage() : e instanceof Error ? e.message : String(e);
+
+export class KeykeeperMspWork {
+  private running: Promise<string[]> | null = null;
+  private rerun = false;
+  /**
+   * Template copies that failed this session, by template, client, and source
+   * version. Automatic runs skip them so a lasting failure can't repeat
+   * forever; a run with `retry` tries them again.
+   */
+  private readonly failed = new Set<string>();
+  private readonly updated = new Subject<void>();
+  /** Emits after members were confirmed or template copies written. */
+  readonly updated$: Observable<void> = this.updated.asObservable();
+
+  constructor(
+    private readonly requests: KeykeeperMspRequests,
+    private readonly sender: KeykeeperTemplateSender,
+    private readonly accountService: AccountService,
+    private readonly authService: AuthService,
+    private readonly cipherService: CipherService,
+    private readonly organizationService: OrganizationService,
+    private readonly organizationUserService: OrganizationUserService,
+    private readonly syncService: SyncService,
+  ) {}
+
+  /** Runs whenever the person unlocks and whenever their items change. */
+  start() {
+    this.accountService.activeAccount$
+      .pipe(
+        switchMap((account) =>
+          account == null
+            ? EMPTY
+            : this.authService
+                .authStatusFor$(account.id)
+                .pipe(
+                  switchMap((status) =>
+                    status === AuthenticationStatus.Unlocked
+                      ? this.cipherService.ciphers$(account.id)
+                      : EMPTY,
+                  ),
+                ),
+        ),
+        debounceTime(SETTLE_MS),
+      )
+      .subscribe(() => void this.run());
+  }
+
+  /**
+   * Confirms waiting members and brings templates up to date in every MSP the
+   * person is staff of. One run at a time; a request during one runs once
+   * more after it. Never throws; resolves to what failed, in sentences.
+   */
+  async run(retry = false): Promise<string[]> {
+    if (retry) {
+      this.failed.clear();
+    }
+    if (this.running != null) {
+      this.rerun = true;
+      return this.running;
+    }
+    this.running = this.runOnce()
+      .catch((e: unknown) => [message(e)])
+      .finally(() => {
+        this.running = null;
+        if (this.rerun) {
+          this.rerun = false;
+          void this.run();
+        }
+      });
+    return this.running;
+  }
+
+  private async runOnce(): Promise<string[]> {
+    if ((await this.authService.getAuthStatus()) !== AuthenticationStatus.Unlocked) {
+      return [];
+    }
+    const failures: string[] = [];
+    let changed = false;
+    for (const summary of await this.requests.list()) {
+      // confirmPending tells listeners itself when it confirmed someone.
+      const confirm = await this.confirmPending(summary.id);
+      failures.push(...confirm.failed);
+      if (summary.role === "admin") {
+        const templates = await this.updateTemplates(summary.id);
+        changed ||= templates.wrote;
+        failures.push(...templates.failures);
+      }
+    }
+    if (changed) {
+      this.updated.next();
+    }
+    return failures;
+  }
+
+  /**
+   * Confirms every membership waiting for an org key that this person can
+   * give, with upstream's confirm request. A member someone else confirmed in
+   * the meantime is skipped.
+   */
+  async confirmPending(mspId: string): Promise<ConfirmResult> {
+    const pending = await this.requests.pending(mspId);
+    if (pending.length === 0) {
+      return { confirmed: 0, failed: [] };
+    }
+    // Org keys for clients created or joined since the last sync.
+    await this.syncService.fullSync(false);
+    const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
+    const organizations = await firstValueFrom(this.organizationService.organizations$(userId));
+    const result: ConfirmResult = { confirmed: 0, failed: [] };
+    for (const p of pending) {
+      const organization = organizations.find((o) => o.id === p.organizationId);
+      if (organization == null) {
+        continue;
+      }
+      try {
+        await firstValueFrom(
+          this.organizationUserService.confirmUser(
+            organization,
+            p.memberId,
+            Utils.fromB64ToArray(p.publicKey),
+          ),
+        );
+        result.confirmed++;
+      } catch (e) {
+        result.failed.push(`${p.email} in ${organization.name}: ${message(e)}`);
+      }
+    }
+    if (result.confirmed > 0) {
+      this.updated.next();
+    }
+    return result;
+  }
+
+  /**
+   * Writes the current version of each template the person can see into
+   * every client that's behind, and moves duplicate copies (from two devices
+   * writing at once) to the client's trash.
+   */
+  private async updateTemplates(mspId: string): Promise<{ wrote: boolean; failures: string[] }> {
+    const [msp, state] = await Promise.all([
+      this.requests.get(mspId),
+      this.requests.getTemplates(mspId),
+    ]);
+    const outcome = { wrote: false, failures: [] as string[] };
+    if (state.templates.length === 0) {
+      return outcome;
+    }
+    const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
+    const items = await this.cipherService.getAllDecrypted(userId);
+    const rows = templateRows(
+      state,
+      msp.clients.map(({ id, name }) => ({ id, name })),
+      knownItems(items),
+    );
+    for (const row of rows) {
+      const source = items.find((c) => c.id === row.sourceCipherId);
+      if (!row.sourceVisible || source == null) {
+        continue;
+      }
+      const revision = source.revisionDate.toISOString();
+      const key = (clientId: string) => `${row.templateId}:${clientId}:${revision}`;
+      const behind = keyed(msp, row.behind).filter((c) => !this.failed.has(key(c.id)));
+      if (behind.length > 0) {
+        const result = await this.sender.send(msp, source, behind, state);
+        for (const f of result.failed) {
+          this.failed.add(key(f.id));
+          outcome.failures.push(`${source.name} in ${f.name}: ${f.error}`);
+        }
+        outcome.wrote ||= result.sent.length > 0;
+      }
+    }
+    const extras = duplicateCopies(state, items);
+    if (extras.length > 0) {
+      await this.sender.removeCopies(extras);
+      outcome.wrote = true;
+    }
+    return outcome;
+  }
+}
+
+/** Clients whose key the person holds, so a copy can be encrypted for them. */
+function keyed(msp: MspDetails, clients: { id: string; name: string }[]) {
+  const confirmed = new Set(
+    msp.clients.filter((c) => c.you?.status === CONFIRMED).map((c) => c.id),
+  );
+  return clients.filter((c) => confirmed.has(c.id));
+}
+
+/**
+ * Copies of the MSP's templates that aren't the recorded copy in their client:
+ * the result of two devices writing a copy at the same moment. Only live items
+ * in a client with a recorded, live copy of the same template count.
+ */
+export function duplicateCopies(state: MspTemplates, items: CipherView[]): string[] {
+  const live = new Set(items.filter((c) => !c.isDeleted).map((c) => c.id));
+  const extras: string[] = [];
+  for (const copy of state.copies) {
+    if (!live.has(copy.cipherId)) {
+      continue;
+    }
+    for (const item of items) {
+      if (
+        item.id !== copy.cipherId &&
+        !item.isDeleted &&
+        item.organizationId === copy.organizationId &&
+        templateDefinition(item)?.id === copy.templateId &&
+        templateDefinition(item)?.from != null
+      ) {
+        extras.push(item.id);
+      }
+    }
+  }
+  return extras;
+}

@@ -2,7 +2,9 @@
 // client's copy is up to date when it was made from the source's current
 // version (the source's revision date). See DESIGN.md, "MSP templates".
 
-import { MspTemplates } from "./msp-api.service";
+import { CipherView } from "@bitwarden/common/vault/models/view/cipher.view";
+
+import { MspTemplates } from "./msp-types";
 
 type NamedClient = { id: string; name: string };
 
@@ -86,4 +88,19 @@ export function templateTargets(row: Pick<TemplateRow, "allClients" | "targets">
   }
   const names = row.targets.map((c) => c.name);
   return names.length > 3 ? `${names.length} clients` : names.join(", ");
+}
+
+/** What the person's decrypted items say about templates: names, versions, and where they are. */
+export function knownItems(items: CipherView[]): Map<string, KnownItem> {
+  return new Map(
+    items.map((c): [string, KnownItem] => [
+      c.id,
+      {
+        name: c.name,
+        revision: c.revisionDate.toISOString(),
+        deleted: c.isDeleted,
+        organizationId: c.organizationId ?? null,
+      },
+    ]),
+  );
 }

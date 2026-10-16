@@ -1,5 +1,5 @@
-import { MspTemplates } from "./msp-api.service";
-import { KnownItem, templateRows, templateStatus, templateTargets } from "./msp-templates";
+import { KnownItem, templateRows, templateStatus, templateTargets } from "./msp-template-status";
+import { MspTemplates } from "./msp-types";
 
 const clients = [
   { id: "dental", name: "Acme Dental" },

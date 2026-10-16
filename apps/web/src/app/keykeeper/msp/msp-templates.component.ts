@@ -13,6 +13,13 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormBuilder, FormControl, FormGroup } from "@angular/forms";
 import { firstValueFrom } from "rxjs";
 
+import {
+  knownItems,
+  TemplateRow,
+  templateRows,
+  templateStatus,
+  templateTargets,
+} from "@bitwarden/admin-console/common";
 import { AccountService } from "@bitwarden/common/auth/abstractions/account.service";
 import { getUserId } from "@bitwarden/common/auth/services/account.service";
 import { ErrorResponse } from "@bitwarden/common/models/response/error.response";
@@ -25,9 +32,7 @@ import { SharedModule } from "../../shared";
 
 import { KeykeeperMspApiService, MspDetails, MspTemplates } from "./msp-api.service";
 import { clientList } from "./msp-policies";
-import { KeykeeperTemplateSender } from "./msp-template-sender.service";
-import { KeykeeperTemplateSync, knownItems } from "./msp-template-sync.service";
-import { TemplateRow, templateRows, templateStatus, templateTargets } from "./msp-templates";
+import { KeykeeperMspWorkService, KeykeeperTemplateSenderService } from "./msp-work.service";
 
 /**
  * Keykeeper: the item templates an MSP's clients get. A template here applies
@@ -200,8 +205,8 @@ export class KeykeeperMspTemplatesComponent {
   constructor(
     private readonly formBuilder: FormBuilder,
     private readonly mspApi: KeykeeperMspApiService,
-    private readonly sender: KeykeeperTemplateSender,
-    private readonly templateSync: KeykeeperTemplateSync,
+    private readonly sender: KeykeeperTemplateSenderService,
+    private readonly work: KeykeeperMspWorkService,
     private readonly cipherService: CipherService,
     private readonly accountService: AccountService,
     private readonly dialogService: DialogService,
@@ -227,7 +232,7 @@ export class KeykeeperMspTemplatesComponent {
       }
     });
     // Copies updated in the background, such as after the person edited a template.
-    this.templateSync.updated$
+    this.work.updated$
       .pipe(takeUntilDestroyed(inject(DestroyRef)))
       .subscribe(() => this.changed.emit());
   }
@@ -268,7 +273,7 @@ export class KeykeeperMspTemplatesComponent {
         allClients,
         clients: chosen,
       });
-      const failures = await this.templateSync.updateNow(true);
+      const failures = await this.work.run(true);
       const names = m.clients.filter((c) => chosen.includes(c.id));
       this.report(
         `${source.name} now applies to ${allClients ? "every client" : clientList(names)}.`,
@@ -280,10 +285,7 @@ export class KeykeeperMspTemplatesComponent {
   /** Tries again for clients that don't have the latest version. */
   protected async update(row: TemplateRow) {
     await this.attempt(async () => {
-      this.report(
-        `Updated ${row.name ?? "the template"}.`,
-        await this.templateSync.updateNow(true),
-      );
+      this.report(`Updated ${row.name ?? "the template"}.`, await this.work.run(true));
     });
   }
 
