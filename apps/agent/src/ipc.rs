@@ -51,6 +51,12 @@ pub fn write_frame(writer: &mut impl Write, frame: &[u8]) -> io::Result<()> {
 /// Where the agent listens, per user: a hash of the home folder, as upstream
 /// names its pipe, so two people on one computer never share one.
 pub fn address() -> PathBuf {
+    // End-to-end tests give the agent, and the host the browser starts, a
+    // private address. Test builds only.
+    #[cfg(feature = "test-authenticator")]
+    if let Some(home) = std::env::var_os("PASSBUNDLE_AGENT_TEST_HOME") {
+        return address_for(&home);
+    }
     let home =
         std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default();
     address_for(&home)
