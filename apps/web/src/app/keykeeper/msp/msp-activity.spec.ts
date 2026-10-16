@@ -100,21 +100,21 @@ describe("MSP activity sentences", () => {
     const names = (id: string) => (id === "4f6c-fw" ? "Firewall" : undefined);
     expect(
       describeEvent(event({ event: "template_added", detail: "4f6c-fw:every client" }), names),
-    ).toBe("ana@northwind.test started sending Firewall to every client");
+    ).toBe("ana@northwind.test added the template Firewall for every client");
     expect(
       describeEvent(event({ event: "template_changed", detail: "4f6c-fw:2 clients" }), names),
-    ).toBe("ana@northwind.test now sends Firewall to 2 clients");
+    ).toBe("ana@northwind.test changed which clients get Firewall: 2 clients");
     expect(
       describeEvent(event({ event: "template_sent", detail: "4f6c-fw:1 client" }), names),
-    ).toBe("ana@northwind.test sent Firewall to Acme Dental");
+    ).toBe("Firewall was applied to Acme Dental (by ana@northwind.test)");
     expect(
       describeEvent(
         event({ event: "template_sent", detail: "4f6c-fw:3 clients", organizationName: null }),
         names,
       ),
-    ).toBe("ana@northwind.test sent Firewall to 3 clients");
+    ).toBe("Firewall was applied to 3 clients (by ana@northwind.test)");
     expect(describeEvent(event({ event: "template_stopped", detail: "other-id" }), names)).toBe(
-      "ana@northwind.test stopped sending a template",
+      "ana@northwind.test removed a template",
     );
   });
 });

@@ -1,12 +1,15 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
   effect,
+  inject,
   input,
   output,
   signal,
 } from "@angular/core";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormBuilder, FormControl, FormGroup } from "@angular/forms";
 import { firstValueFrom } from "rxjs";
 
@@ -20,25 +23,17 @@ import { customTemplate, templateDefinition } from "@bitwarden/vault";
 
 import { SharedModule } from "../../shared";
 
-import { KeykeeperMspApiService, MspClient, MspDetails, MspTemplates } from "./msp-api.service";
+import { KeykeeperMspApiService, MspDetails, MspTemplates } from "./msp-api.service";
 import { clientList } from "./msp-policies";
-import { KeykeeperTemplateSender, SendResult } from "./msp-template-sender.service";
-import {
-  KnownItem,
-  TemplateRow,
-  templateRows,
-  templateStatus,
-  templateTargets,
-} from "./msp-templates";
-
-const CONFIRMED = 2;
+import { KeykeeperTemplateSender } from "./msp-template-sender.service";
+import { KeykeeperTemplateSync, knownItems } from "./msp-template-sync.service";
+import { TemplateRow, templateRows, templateStatus, templateTargets } from "./msp-templates";
 
 /**
- * Keykeeper: the item templates an MSP sends to its clients. MSP admins pick
- * a template they can see and send it to every client (including clients
- * added later) or chosen ones; the console writes encrypted copies into each
- * client's Templates collection and shows which clients need an update after
- * the source changes. See DESIGN.md, "MSP templates".
+ * Keykeeper: the item templates an MSP's clients get. A template here applies
+ * automatically to every client (including clients added later) or to chosen
+ * ones; any MSP admin's web vault keeps the clients' copies current, so people
+ * only edit the template itself. See DESIGN.md, "MSP templates".
  */
 @Component({
   selector: "app-keykeeper-msp-templates",
@@ -48,18 +43,18 @@ const CONFIRMED = 2;
     <section class="tw-mb-8" aria-label="Templates" data-testid="msp-templates">
       <h2 bitTypography="h3">Templates</h2>
       <p bitTypography="body2">
-        Item templates your clients get, in each client's Templates collection. A template for every
-        client also goes to clients you add later. To change a template, edit it where you made it,
-        then update your clients here.
+        Templates here apply to your clients automatically, including clients you add later. Each
+        client has them in its Templates collection. To change one, edit it, and your clients get
+        the change.
       </p>
       @if (rows().length === 0) {
-        <p bitTypography="body2" class="tw-text-muted">No templates sent yet.</p>
+        <p bitTypography="body2" class="tw-text-muted">No templates yet.</p>
       } @else {
         <bit-table>
           <ng-container header>
             <tr>
               <th bitCell>Template</th>
-              <th bitCell>Clients</th>
+              <th bitCell>Applies to</th>
               <th bitCell>Status</th>
               <th bitCell></th>
             </tr>
@@ -73,19 +68,35 @@ const CONFIRMED = 2;
                 <td bitCell data-testid="msp-template-status">{{ status(row) }}</td>
                 <td bitCell class="tw-whitespace-nowrap tw-text-right">
                   @if (isAdmin()) {
-                    @if (row.sourceVisible && row.behind.length > 0) {
-                      <button type="button" bitLink class="tw-mr-3" (click)="update(row)">
-                        Update
-                        {{ row.behind.length === 1 ? "1 client" : row.behind.length + " clients" }}
-                      </button>
+                    @if (row.sourceVisible) {
+                      <a
+                        bitLink
+                        class="tw-mr-3"
+                        [routerLink]="['/vault']"
+                        [queryParams]="{ itemId: row.sourceCipherId, action: 'edit' }"
+                        [attr.aria-label]="'Edit ' + name"
+                      >
+                        Edit
+                      </a>
+                      @if (row.behind.length > 0) {
+                        <button
+                          type="button"
+                          bitLink
+                          class="tw-mr-3"
+                          [attr.aria-label]="'Update ' + name"
+                          (click)="update(row)"
+                        >
+                          Update
+                        </button>
+                      }
                     }
                     <button
                       type="button"
                       bitLink
-                      [attr.aria-label]="'Stop sending ' + name"
-                      (click)="stop(row)"
+                      [attr.aria-label]="'Remove ' + name"
+                      (click)="remove(row)"
                     >
-                      Stop
+                      Remove
                     </button>
                   }
                 </td>
@@ -98,11 +109,11 @@ const CONFIRMED = 2;
       @if (isAdmin()) {
         <form
           [formGroup]="form"
-          [bitSubmit]="send"
+          [bitSubmit]="add"
           class="tw-mt-4 tw-rounded-lg tw-border tw-border-solid tw-border-secondary-300 tw-p-4"
-          aria-label="Send a template"
+          aria-label="Add a template"
         >
-          <h3 bitTypography="h5">Send a template</h3>
+          <h3 bitTypography="h5">Add a template</h3>
           @if (candidates().length === 0) {
             <p bitTypography="body2" class="tw-mb-0">
               Make a template first: in your vault, choose New, then From template, then Create
@@ -121,7 +132,7 @@ const CONFIRMED = 2;
               >
             </bit-form-field>
             <bit-radio-group formControlName="scope" [block]="true">
-              <bit-label>Clients</bit-label>
+              <bit-label>Applies to</bit-label>
               <bit-radio-button value="all">
                 <bit-label>Every client</bit-label>
                 <bit-hint>Including clients added later.</bit-hint>
@@ -140,7 +151,7 @@ const CONFIRMED = 2;
                 }
               </div>
             }
-            <button bitButton bitFormButton buttonType="primary" type="submit">Send</button>
+            <button bitButton bitFormButton buttonType="primary" type="submit">Add template</button>
           }
         </form>
       }
@@ -162,21 +173,11 @@ export class KeykeeperMspTemplatesComponent {
     templateRows(
       this.templates(),
       this.msp().clients.map(({ id, name }) => ({ id, name })),
-      new Map(
-        this.items().map((c): [string, KnownItem] => [
-          c.id,
-          {
-            name: c.name,
-            revision: c.revisionDate.toISOString(),
-            deleted: c.isDeleted,
-            organizationId: c.organizationId ?? null,
-          },
-        ]),
-      ),
+      knownItems(this.items()),
     ),
   );
 
-  /** Templates an admin can send: their own and their organizations', never a client's copy. */
+  /** Templates an admin can add: their own and their organizations', never a client's copy. */
   protected readonly candidates = computed(() => {
     const clients = new Set(this.msp().clients.map((c) => c.id));
     return this.items()
@@ -200,6 +201,7 @@ export class KeykeeperMspTemplatesComponent {
     private readonly formBuilder: FormBuilder,
     private readonly mspApi: KeykeeperMspApiService,
     private readonly sender: KeykeeperTemplateSender,
+    private readonly templateSync: KeykeeperTemplateSync,
     private readonly cipherService: CipherService,
     private readonly accountService: AccountService,
     private readonly dialogService: DialogService,
@@ -224,6 +226,10 @@ export class KeykeeperMspTemplatesComponent {
         this.form.controls.source.setValue(candidates[0]?.id ?? "");
       }
     });
+    // Copies updated in the background, such as after the person edited a template.
+    this.templateSync.updated$
+      .pipe(takeUntilDestroyed(inject(DestroyRef)))
+      .subscribe(() => this.changed.emit());
   }
 
   protected targets(row: TemplateRow) {
@@ -239,17 +245,7 @@ export class KeykeeperMspTemplatesComponent {
     this.items.set(await this.cipherService.getAllDecrypted(userId));
   }
 
-  /** Clients whose key the person holds, so a copy can be encrypted for them. */
-  private keyed(clients: { id: string; name: string }[]) {
-    const confirmed = new Set(
-      this.msp()
-        .clients.filter((c: MspClient) => c.you?.status === CONFIRMED)
-        .map((c) => c.id),
-    );
-    return clients.filter((c) => confirmed.has(c.id));
-  }
-
-  protected readonly send = async () => {
+  protected readonly add = async () => {
     const source = this.items().find((c) => c.id === this.form.controls.source.value);
     const definition = templateDefinition(source);
     if (source == null || definition == null) {
@@ -272,75 +268,65 @@ export class KeykeeperMspTemplatesComponent {
         allClients,
         clients: chosen,
       });
-      const targets = m.clients.filter((c) => allClients || chosen.includes(c.id));
-      const result = await this.sender.send(
-        m,
-        source,
-        this.keyed(targets),
-        await this.mspApi.getTemplates(m.id),
+      const failures = await this.templateSync.updateNow(true);
+      const names = m.clients.filter((c) => chosen.includes(c.id));
+      this.report(
+        `${source.name} now applies to ${allClients ? "every client" : clientList(names)}.`,
+        failures,
       );
-      this.report(source.name, result);
     });
   };
 
+  /** Tries again for clients that don't have the latest version. */
   protected async update(row: TemplateRow) {
-    const source = this.items().find((c) => c.id === row.sourceCipherId);
-    if (source == null) {
-      return;
-    }
     await this.attempt(async () => {
-      const result = await this.sender.send(
-        this.msp(),
-        source,
-        this.keyed(row.behind),
-        this.templates(),
+      this.report(
+        `Updated ${row.name ?? "the template"}.`,
+        await this.templateSync.updateNow(true),
       );
-      this.report(source.name, result);
     });
   }
 
-  protected async stop(row: TemplateRow) {
+  protected async remove(row: TemplateRow) {
     const name = row.name ?? "this template";
-    const stop = await this.dialogService.openSimpleDialog({
-      title: `Stop sending ${name}?`,
-      content: "Clients you add later won't get it, and its copies won't be updated.",
-      acceptButtonText: "Stop sending",
+    const confirmed = await this.dialogService.openSimpleDialog({
+      title: `Remove ${name}?`,
+      content: "Clients you add later won't get it, and its copies won't change anymore.",
+      acceptButtonText: "Remove",
       type: "warning",
     });
-    if (!stop) {
+    if (!confirmed) {
       return;
     }
     const copies = this.templates()
       .copies.filter((c) => c.templateId === row.templateId)
       .map((c) => c.cipherId)
       .filter((id) => this.items().some((i) => i.id === id && !i.isDeleted));
-    const remove =
+    const removeCopies =
       copies.length > 0 &&
       (await this.dialogService.openSimpleDialog({
-        title: `Remove its copies too?`,
-        content: `${copies.length === 1 ? "1 client has" : copies.length + " clients have"} a copy. Removing moves it to the client's trash; keeping leaves it as that client's template.`,
-        acceptButtonText: "Remove copies",
-        cancelButtonText: "Keep them",
+        title: "Remove it from your clients too?",
+        content: `${copies.length === 1 ? "1 client has" : copies.length + " clients have"} it. Removing moves it to the client's trash; keeping leaves it as that client's own template.`,
+        acceptButtonText: "Remove from clients",
+        cancelButtonText: "Keep it there",
         type: "warning",
       }));
     await this.attempt(async () => {
-      if (remove) {
+      if (removeCopies) {
         await this.sender.removeCopies(copies);
       }
       await this.mspApi.stopTemplate(this.msp().id, row.templateId);
-      this.toast("success", `Stopped sending ${name}`);
+      this.toast("success", `Removed ${name}`);
       this.changed.emit();
     });
   }
 
-  private report(name: string, result: SendResult) {
-    const parts = [
-      result.sent.length > 0
-        ? `Sent ${name} to ${clientList(result.sent)}.`
-        : `${name} is saved; no client needed a copy.`,
-      ...result.failed.map((f) => `${f.name} failed: ${f.error}`),
-    ];
-    this.toast(result.failed.length > 0 ? "warning" : "success", parts.join(" "));
+  private report(done: string, failures: string[]) {
+    if (failures.length > 0) {
+      this.toast("warning", `${done} Not yet: ${failures.join("; ")}`);
+    } else {
+      this.toast("success", done);
+    }
     this.changed.emit();
   }
 

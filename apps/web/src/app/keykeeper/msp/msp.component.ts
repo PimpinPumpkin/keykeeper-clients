@@ -42,7 +42,7 @@ import {
   TechnicianAccess,
 } from "./msp-api.service";
 import { clientPolicySummary } from "./msp-policies";
-import { KeykeeperTemplateSender } from "./msp-template-sender.service";
+import { KeykeeperTemplateSync } from "./msp-template-sync.service";
 import { KeykeeperMspTemplatesComponent } from "./msp-templates.component";
 import { DEFAULT_ACCESS, describeAccess, reachesEveryClient } from "./technician-access";
 import { KeykeeperTechnicianAccessEditorComponent } from "./technician-access-editor.component";
@@ -586,7 +586,7 @@ export class KeykeeperMspComponent implements OnInit {
     private readonly route: ActivatedRoute,
     private readonly router: Router,
     private readonly configService: ConfigService,
-    private readonly templateSender: KeykeeperTemplateSender,
+    private readonly templateSync: KeykeeperTemplateSync,
   ) {}
 
   async ngOnInit() {
@@ -603,6 +603,8 @@ export class KeykeeperMspComponent implements OnInit {
       if (first) {
         await this.confirmWaiting(first.id);
         await this.reload(first.id);
+        // Brings clients' templates up to date; the section reloads if anything changed.
+        void this.templateSync.updateNow();
       }
     } catch (e) {
       this.showError(e);
@@ -630,16 +632,19 @@ export class KeykeeperMspComponent implements OnInit {
     }
     await this.attempt(async () => {
       const name = this.clientForm.value.name!.trim();
-      const orgId = await this.mspApi.createClient(
-        msp.id,
-        name,
-        this.clientForm.value.preset as ClientPreset,
-      );
+      await this.mspApi.createClient(msp.id, name, this.clientForm.value.preset as ClientPreset);
       // Everyone else on staff joined the new client; give them its key now.
       await this.confirmWaiting(msp.id);
       this.clientForm.reset({ name: "", preset: "business" });
       this.toast(`Added ${name}`);
-      await this.sendTemplatesToNewClient(msp, { id: orgId, name });
+      // Templates for every client apply to the new one too.
+      const failures = await this.templateSync.updateNow();
+      if (failures.length > 0) {
+        this.toastService.showToast({
+          variant: "warning",
+          message: `Not every template reached ${name} yet: ${failures.join("; ")}`,
+        });
+      }
       await this.reload(msp.id);
     });
   };
@@ -841,43 +846,6 @@ export class KeykeeperMspComponent implements OnInit {
     const events = await this.mspApi.listEvents(mspId);
     this.events.set(events);
     this.moreEvents.set(events.length === EVENTS_PER_PAGE);
-  }
-
-  /** A new client gets every template sent to every client. */
-  private async sendTemplatesToNewClient(msp: MspDetails, client: { id: string; name: string }) {
-    let state: MspTemplates;
-    try {
-      state = await this.mspApi.getTemplates(msp.id);
-    } catch {
-      return;
-    }
-    const everyClient = state.templates.filter((t) => t.allClients);
-    if (everyClient.length === 0) {
-      return;
-    }
-    const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
-    const items = await this.cipherService.getAllDecrypted(userId);
-    const problems: string[] = [];
-    let sent = 0;
-    for (const t of everyClient) {
-      const source = items.find((c) => c.id === t.sourceCipherId && !c.isDeleted);
-      if (source == null) {
-        problems.push("a template whose source you can't see (another MSP admin can send it)");
-        continue;
-      }
-      const result = await this.templateSender.send(msp, source, [client], state);
-      sent += result.sent.length;
-      problems.push(...result.failed.map((f) => `${source.name} (${f.error})`));
-    }
-    if (sent > 0) {
-      this.toast(`Sent ${sent === 1 ? "1 template" : sent + " templates"} to ${client.name}`);
-    }
-    if (problems.length > 0) {
-      this.toastService.showToast({
-        variant: "warning",
-        message: `${client.name} didn't get ${problems.join(", ")}.`,
-      });
-    }
   }
 
   private async loadTemplates(mspId: string) {

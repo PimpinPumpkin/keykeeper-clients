@@ -54,7 +54,7 @@ describe("MSP templates", () => {
     expect(fw).toMatchObject({ name: "Firewall", sourceVisible: true, allClients: true });
     expect(fw.upToDate.map((c) => c.name)).toEqual(["Acme Dental"]);
     expect(fw.behind.map((c) => c.name)).toEqual(["Baker Law", "Corner Bakery"]);
-    expect(templateStatus(fw)).toBe("2 of 3 clients need it");
+    expect(templateStatus(fw)).toBe("Needs updating in 2 of 3 clients");
     expect(templateTargets(fw)).toBe("Every client");
   });
 
@@ -76,7 +76,7 @@ describe("MSP templates", () => {
     ]);
     const [fw] = templateRows(state, [clients[0]], items);
     expect(fw.behind.map((c) => c.name)).toEqual(["Acme Dental"]);
-    expect(templateStatus(fw)).toBe("1 of 1 client needs it");
+    expect(templateStatus(fw)).toBe("Needs updating in 1 of 1 client");
   });
 
   it("have no name when the person sees neither the source nor a copy", () => {
