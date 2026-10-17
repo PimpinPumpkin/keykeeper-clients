@@ -23,6 +23,7 @@ const USER = "user-1" as UserId;
 
 function setup() {
   const requests = mock<KeykeeperMspRequests>();
+  requests.organizationsPending.mockResolvedValue([]);
   const sender = mock<KeykeeperTemplateSender>();
   const accountService = mock<AccountService>();
   accountService.activeAccount$ = new BehaviorSubject({ id: USER } as any);
@@ -31,7 +32,12 @@ function setup() {
   const cipherService = mock<CipherService>();
   cipherService.getAllDecrypted.mockResolvedValue([]);
   const organizationService = mock<OrganizationService>();
-  const dental = { id: "dental", name: "Acme Dental" } as Organization;
+  const dental = {
+    id: "dental",
+    name: "Acme Dental",
+    isOwner: true,
+    isAdmin: true,
+  } as Organization;
   organizationService.organizations$.mockReturnValue(of([dental]));
   const organizationUserService = mock<OrganizationUserService>();
   organizationUserService.confirmUser.mockReturnValue(of(undefined));
@@ -46,14 +52,15 @@ function setup() {
     organizationUserService,
     syncService,
   );
-  return { work, requests, authService, organizationUserService };
+  return { work, requests, authService, organizationService, organizationUserService };
 }
 
-const member = (organizationId: string, memberId: string): PendingMember => ({
+const member = (organizationId: string, memberId: string, autoConfirm = true): PendingMember => ({
   organizationId,
   memberId,
   email: `${memberId}@example.test`,
   publicKey: "AAEC",
+  autoConfirm,
 });
 
 describe("MSP background work", () => {
@@ -97,7 +104,10 @@ describe("MSP background work", () => {
 
     const first = work.run();
     const second = work.run();
-    await Promise.resolve();
+    // Let the first run reach the MSP list, where it waits.
+    for (let i = 0; i < 50 && requests.list.mock.calls.length === 0; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
     expect(requests.list).toHaveBeenCalledTimes(1);
     release();
     await first;
@@ -107,12 +117,33 @@ describe("MSP background work", () => {
     expect(requests.list).toHaveBeenCalledTimes(2);
   });
 
-  it("confirms for technicians too, but only MSP admins write templates", async () => {
-    const { work, requests } = setup();
-    requests.list.mockResolvedValue([{ id: "msp-1", name: "Northwind IT", role: "technician" }]);
-    requests.pending.mockResolvedValue([]);
+  it("in the background, confirms where the organization does so automatically and leaves the rest for an admin", async () => {
+    const { work, requests, organizationUserService } = setup();
+    requests.organizationsPending.mockResolvedValue([
+      member("dental", "ana"),
+      member("dental", "ben", false),
+    ]);
+    requests.list.mockResolvedValue([]);
+    expect(await work.run()).toEqual([]);
+    expect(organizationUserService.confirmUser).toHaveBeenCalledTimes(1);
+    expect(organizationUserService.confirmUser.mock.calls[0][1]).toBe("ana");
+  });
+
+  it("doesn't ask who's waiting when the person isn't an owner or admin anywhere", async () => {
+    const { work, requests, organizationService } = setup();
+    organizationService.organizations$.mockReturnValue(
+      of([{ id: "dental", name: "Acme Dental", isOwner: false, isAdmin: false } as Organization]),
+    );
+    requests.list.mockResolvedValue([]);
     await work.run();
-    expect(requests.pending).toHaveBeenCalledWith("msp-1");
+    expect(requests.organizationsPending).not.toHaveBeenCalled();
+  });
+
+  it("only MSP admins write templates", async () => {
+    const { work, requests } = setup();
+    requests.organizationsPending.mockResolvedValue([]);
+    requests.list.mockResolvedValue([{ id: "msp-1", name: "Northwind IT", role: "technician" }]);
+    await work.run();
     expect(requests.getTemplates).not.toHaveBeenCalled();
   });
 });

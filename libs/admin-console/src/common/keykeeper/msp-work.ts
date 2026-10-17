@@ -1,10 +1,11 @@
-// Keykeeper: an MSP's background work, so clients stay set up without anyone
-// opening the MSP console. It confirms members waiting for their org key in
-// clients where the person can (giving the org key the normal way, encrypted
-// to the member's public key), and keeps clients' copies of the MSP's
-// templates current. Both need the person's unlocked keys, so this runs in the
-// web vault and the browser extension of MSP staff while they're unlocked.
-// See DESIGN.md, "MSP console" and "MSP templates".
+// Keykeeper: background work, so people get in and clients stay set up
+// without anyone opening a console. It confirms members waiting for their org
+// key in every organization where the person is an owner or admin and that
+// confirms automatically (giving the org key the normal way, encrypted to the
+// member's public key), and keeps MSP clients' copies of the MSP's templates
+// current. Both need the person's unlocked keys, so this runs in the web vault
+// and the browser extension while they're unlocked.
+// See DESIGN.md, "Joining", "MSP console", and "MSP templates".
 
 import { EMPTY, Observable, Subject, debounceTime, firstValueFrom, switchMap } from "rxjs";
 
@@ -25,7 +26,7 @@ import { OrganizationUserService } from "../organization-user";
 import { KeykeeperMspRequests } from "./msp-requests";
 import { KeykeeperTemplateSender } from "./msp-template-sender";
 import { knownItems, templateRows } from "./msp-template-status";
-import { MspDetails, MspTemplates } from "./msp-types";
+import { MspDetails, MspTemplates, PendingMember } from "./msp-types";
 
 const CONFIRMED = 2;
 /** Waits for a burst of changes, such as a sync, to settle. */
@@ -113,10 +114,9 @@ export class KeykeeperMspWork {
     }
     const failures: string[] = [];
     let changed = false;
+    // confirmWaiting tells listeners itself when it confirmed someone.
+    failures.push(...(await this.confirmWaiting()).failed);
     for (const summary of await this.requests.list()) {
-      // confirmPending tells listeners itself when it confirmed someone.
-      const confirm = await this.confirmPending(summary.id);
-      failures.push(...confirm.failed);
       if (summary.role === "admin") {
         const templates = await this.updateTemplates(summary.id);
         changed ||= templates.wrote;
@@ -130,16 +130,38 @@ export class KeykeeperMspWork {
   }
 
   /**
-   * Confirms every membership waiting for an org key that this person can
-   * give, with upstream's confirm request. A member someone else confirmed in
-   * the meantime is skipped.
+   * Confirms everyone waiting in the organizations where this person is an
+   * owner or admin and that confirm automatically. Organizations set to
+   * require approval are left for an admin.
+   */
+  private async confirmWaiting(): Promise<ConfirmResult> {
+    const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
+    const organizations = await firstValueFrom(this.organizationService.organizations$(userId));
+    // Only owners and admins confirm; don't ask the server otherwise.
+    if (!organizations.some((o) => o.isOwner || o.isAdmin)) {
+      return { confirmed: 0, failed: [] };
+    }
+    const pending = (await this.requests.organizationsPending()).filter((p) => p.autoConfirm);
+    return this.confirm(pending);
+  }
+
+  /**
+   * Confirms every membership waiting in an MSP's clients that this person
+   * can confirm, approval required or not: the MSP console's Confirm.
    */
   async confirmPending(mspId: string): Promise<ConfirmResult> {
-    const pending = await this.requests.pending(mspId);
+    return this.confirm(await this.requests.pending(mspId));
+  }
+
+  /**
+   * Confirms memberships with upstream's confirm request. A member someone
+   * else confirmed in the meantime fails and is reported.
+   */
+  private async confirm(pending: PendingMember[]): Promise<ConfirmResult> {
     if (pending.length === 0) {
       return { confirmed: 0, failed: [] };
     }
-    // Org keys for clients created or joined since the last sync.
+    // Org keys for organizations created or joined since the last sync.
     await this.syncService.fullSync(false);
     const userId = await firstValueFrom(this.accountService.activeAccount$.pipe(getUserId));
     const organizations = await firstValueFrom(this.organizationService.organizations$(userId));

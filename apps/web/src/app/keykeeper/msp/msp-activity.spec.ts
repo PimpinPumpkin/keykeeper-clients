@@ -36,6 +36,18 @@ describe("MSP activity sentences", () => {
       "ana@northwind.test put Acme Dental back on the default Master password requirements",
     ],
     [
+      { event: "joining_default_set", detail: "confirmed automatically; invitations last 2 hours" },
+      "ana@northwind.test set how people join clients: confirmed automatically; invitations last 2 hours",
+    ],
+    [
+      { event: "client_joining_set", detail: "approved by an admin; invitations last 5 days" },
+      "ana@northwind.test set how people join Acme Dental: approved by an admin; invitations last 5 days",
+    ],
+    [
+      { event: "client_joining_default" },
+      "ana@northwind.test put Acme Dental back on the joining default",
+    ],
+    [
       { event: "client_created", detail: "No defaults" },
       "ana@northwind.test added the client Acme Dental",
     ],

@@ -4,7 +4,16 @@
 
 import { ApiService } from "@bitwarden/common/abstractions/api.service";
 
-import { MspDetails, MspSummary, MspTemplates, PendingMember, TemplateCopy } from "./msp-types";
+import {
+  Joining,
+  MspDetails,
+  MspJoining,
+  MspSummary,
+  MspTemplates,
+  OrgJoining,
+  PendingMember,
+  TemplateCopy,
+} from "./msp-types";
 
 export class KeykeeperMspRequests {
   constructor(protected readonly apiService: ApiService) {}
@@ -22,6 +31,52 @@ export class KeykeeperMspRequests {
   async pending(mspId: string): Promise<PendingMember[]> {
     return (await this.apiService.send("GET", `/keykeeper/msp/${mspId}/pending`, null, true, true))
       .data;
+  }
+
+  /** Memberships waiting for an org key in every organization where the person can confirm them. */
+  async organizationsPending(): Promise<PendingMember[]> {
+    return (await this.apiService.send("GET", "/keykeeper/organizations/pending", null, true, true))
+      .data;
+  }
+
+  async getOrgJoining(orgId: string): Promise<OrgJoining> {
+    return this.apiService.send(
+      "GET",
+      `/keykeeper/organizations/${orgId}/joining`,
+      null,
+      true,
+      true,
+    );
+  }
+
+  /** Sets the organization's own setting. */
+  async setOrgJoining(orgId: string, joining: Joining): Promise<OrgJoining> {
+    return this.apiService.send(
+      "PUT",
+      `/keykeeper/organizations/${orgId}/joining`,
+      joining,
+      true,
+      true,
+    );
+  }
+
+  /** Puts the organization back on its MSP's default, or the server's. */
+  async resetOrgJoining(orgId: string): Promise<OrgJoining> {
+    return this.apiService.send(
+      "DELETE",
+      `/keykeeper/organizations/${orgId}/joining`,
+      null,
+      true,
+      true,
+    );
+  }
+
+  async getMspJoining(mspId: string): Promise<MspJoining> {
+    return this.apiService.send("GET", `/keykeeper/msp/${mspId}/joining`, null, true, true);
+  }
+
+  async setMspJoining(mspId: string, joining: Joining): Promise<MspJoining> {
+    return this.apiService.send("PUT", `/keykeeper/msp/${mspId}/joining`, joining, true, true);
   }
 
   async getTemplates(mspId: string): Promise<MspTemplates> {
