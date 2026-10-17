@@ -7,7 +7,16 @@
 // and the browser extension while they're unlocked.
 // See DESIGN.md, "Joining", "MSP console", and "MSP templates".
 
-import { EMPTY, Observable, Subject, debounceTime, firstValueFrom, switchMap } from "rxjs";
+import {
+  EMPTY,
+  Observable,
+  Subject,
+  debounceTime,
+  firstValueFrom,
+  interval,
+  merge,
+  switchMap,
+} from "rxjs";
 
 import { OrganizationService } from "@bitwarden/common/admin-console/abstractions/organization/organization.service.abstraction";
 import { AccountService } from "@bitwarden/common/auth/abstractions/account.service";
@@ -31,6 +40,8 @@ import { MspDetails, MspTemplates, PendingMember } from "./msp-types";
 const CONFIRMED = 2;
 /** Waits for a burst of changes, such as a sync, to settle. */
 const SETTLE_MS = 3000;
+/** How often to look again while unlocked. */
+const EVERY_MS = 5 * 60 * 1000;
 
 export type ConfirmResult = { confirmed: number; failed: string[] };
 
@@ -61,7 +72,12 @@ export class KeykeeperMspWork {
     private readonly syncService: SyncService,
   ) {}
 
-  /** Runs whenever the person unlocks and whenever their items change. */
+  /**
+   * Runs whenever the person unlocks, whenever their items change, and every
+   * few minutes while unlocked, so someone who accepts an invitation gets in
+   * soon even if nothing else happens. (The extension's background can sleep,
+   * so it also sets a browser alarm; see apps/browser/src/keykeeper/msp-work.ts.)
+   */
   start() {
     this.accountService.activeAccount$
       .pipe(
@@ -73,7 +89,7 @@ export class KeykeeperMspWork {
                 .pipe(
                   switchMap((status) =>
                     status === AuthenticationStatus.Unlocked
-                      ? this.cipherService.ciphers$(account.id)
+                      ? merge(this.cipherService.ciphers$(account.id), interval(EVERY_MS))
                       : EMPTY,
                   ),
                 ),
