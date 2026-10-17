@@ -67,7 +67,9 @@ Then publish the manifest, its `.minisig`, and the binary under the site's `agen
 
 ## Not built yet
 
+The MSP background work (confirming members, keeping template copies current) stays in the web vault and the extension: the agent holds the user key only behind Windows Hello, and doing it in the background would mean keeping the key unlocked.
+
+
 - Installing the agent from `Install-PassBundle.ps1`, with autostart, the update task, and the native-messaging host registered for Chrome, Edge, and Firefox. Waits on signed builds (Authenticode on Windows, a Developer ID on macOS).
 - Touch ID on macOS, which needs the agent signed with our Apple developer ID.
 - A check of Windows Hello on real hardware: CI machines have none, so Tier 1 uses a stand-in (`--features test-authenticator`, which release builds refuse).
-- The MSP background work (confirming members, keeping template copies current).
