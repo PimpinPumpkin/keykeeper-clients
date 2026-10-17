@@ -104,6 +104,39 @@ export class KeykeeperMspApiService extends KeykeeperMspRequests {
     return created.id;
   }
 
+  /**
+   * Creates an organization outside any MSP, owned by the person, with its
+   * keys made the way upstream's "New organization" makes them. Returns its id.
+   */
+  async createOrganization(name: string): Promise<string> {
+    const account = await firstValueFrom(this.accountService.activeAccount$);
+    const userId = account!.id;
+    const [encryptedKey, key] = await this.keyService.makeOrgKey<OrgKey>(userId);
+    const [publicKey, encryptedPrivateKey] = await this.keyService.makeKeyPair(key);
+    const collectionName = await this.encryptService.encryptString(
+      this.i18nService.t("defaultCollection"),
+      key,
+    );
+    const created = await this.apiService.send(
+      "POST",
+      "/organizations",
+      {
+        name,
+        billingEmail: account!.email,
+        collectionName: collectionName.encryptedString,
+        key: encryptedKey.encryptedString,
+        keys: { publicKey, encryptedPrivateKey: encryptedPrivateKey.encryptedString },
+        // Free: the server has no plans or billing.
+        planType: 0,
+      },
+      true,
+      true,
+    );
+    await this.apiService.refreshIdentityToken();
+    await this.syncService.fullSync(true);
+    return created.id;
+  }
+
   /** Adds a template, or changes its source or which clients get it. */
   async setTemplate(
     mspId: string,

@@ -61,7 +61,6 @@ import { flagEnabled, Flags } from "../utils/flags";
 import { VerifyRecoverDeleteOrgComponent } from "./admin-console/organizations/manage/verify-recover-delete-org.component";
 import { AcceptFamilySponsorshipComponent } from "./admin-console/organizations/sponsorships/accept-family-sponsorship.component";
 import { FamiliesForEnterpriseSetupComponent } from "./admin-console/organizations/sponsorships/families-for-enterprise-setup.component";
-import { CreateOrganizationComponent } from "./admin-console/settings/create-organization.component";
 import { AuthWebRoute, AuthWebRouteSegment } from "./auth/constants/auth-web-route.constant";
 import { deepLinkGuard } from "./auth/guards/deep-link/deep-link.guard";
 import { AcceptOrgDirectInviteComponent } from "./auth/organization-invite/accept-org-direct-invite.component";
@@ -83,6 +82,7 @@ import { ReportsModule } from "./dirt/reports";
 import { DataRecoveryComponent } from "./key-management/data-recovery/data-recovery.component";
 import { ConfirmKeyConnectorDomainComponent } from "./key-management/key-connector/confirm-key-connector-domain.component";
 import { KeykeeperMspComponent } from "./keykeeper/msp/msp.component";
+import { KeykeeperCreateOrganizationComponent } from "./keykeeper/organizations/create-organization.component";
 import { FrontendLayoutComponent } from "./layouts/frontend-layout.component";
 import { UserLayoutComponent } from "./layouts/user-layout.component";
 import { RequestSMAccessComponent } from "./secrets-manager/secrets-manager-landing/request-sm-access.component";
@@ -687,7 +687,8 @@ const routes: Routes = [
       },
       {
         path: "create-organization",
-        component: CreateOrganizationComponent,
+        // Keykeeper: ours, without upstream's license file or plans and payment.
+        component: KeykeeperCreateOrganizationComponent,
         data: { titleId: "newOrganization" } satisfies RouteDataProperties,
       },
       {

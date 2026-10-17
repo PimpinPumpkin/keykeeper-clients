@@ -52,6 +52,12 @@ export function describeEvent(
       return `${actor} removed ${theTemplate}`;
     case "client_policy_default":
       return `${actor} put ${org} back on the default ${e.detail ?? "policy"}`;
+    case "joining_default_set":
+      return `${actor} set how people join clients: ${e.detail ?? "updated"}`;
+    case "client_joining_set":
+      return `${actor} set how people join ${org}: ${e.detail ?? "updated"}`;
+    case "client_joining_default":
+      return `${actor} put ${org} back on the joining default`;
     case "staff_added":
       return `${actor} added ${target} as ${roleName(e.detail)}`;
     case "staff_invited":

@@ -13,6 +13,7 @@ import { Vfo1I18nPipe, Vfo1IconPipe } from "@bitwarden/vault";
 import { BillingConstraintService } from "@bitwarden/web-vault/app/billing/members/billing-constraint/billing-constraint.service";
 import { OrganizationFreeTrialWarningComponent } from "@bitwarden/web-vault/app/billing/organizations/warnings/components";
 
+import { KeykeeperMembersJoiningComponent } from "../../../keykeeper/joining/members-joining.component";
 import { KeykeeperClientMspBannerComponent } from "../../../keykeeper/msp/client-msp-banner.component";
 import { HeaderModule } from "../../../layouts/header/header.module";
 import { SharedOrganizationModule } from "../shared";
@@ -50,6 +51,7 @@ import {
     ScrollLayoutDirective,
     OrganizationFreeTrialWarningComponent,
     KeykeeperClientMspBannerComponent,
+    KeykeeperMembersJoiningComponent,
     IconModule,
     BerryComponent,
     TooltipDirective,

@@ -149,10 +149,28 @@ export type MspTemplates = {
 
 export type TemplateCopy = { organizationId: string; cipherId: string; sourceRevision: string };
 
-/** A membership waiting for its org key in a client the caller can confirm in. */
+/** A membership waiting for its org key in an organization the caller can confirm in. */
 export type PendingMember = {
   organizationId: string;
   memberId: string;
   email: string;
   publicKey: string;
+  /** Whether the organization confirms automatically, or wants an admin to approve. */
+  autoConfirm: boolean;
+};
+
+/** How people join an organization. See DESIGN.md, "Joining". */
+export type Joining = { autoConfirm: boolean; inviteHours: number };
+
+/** An organization's setting, where it comes from, and what its default would be. */
+export type OrgJoining = Joining & {
+  source: "own" | "msp" | "server";
+  mspName?: string;
+  default: Joining;
+};
+
+/** An MSP's default, and the clients with their own setting. */
+export type MspJoining = {
+  default: Joining;
+  ownSettings: (Joining & { organizationId: string; name: string })[];
 };
